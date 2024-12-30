@@ -1,0 +1,5 @@
+nc: int
+backbone: 
+ - [int, int, str, list]
+head: 
+ - [int, int, str, list]

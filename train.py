@@ -1,5 +1,6 @@
 import torch
 from torch import nn, optim
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 class Trainer():
     def __init__(self):
@@ -16,3 +17,11 @@ class Trainer():
             loss = self.criti(output, label)
             loss.backward()
             self.optim.step()
+            
+class DistributedTrainer(Trainer):
+    def __init__(self):
+        pass
+    
+class TrainerManager():
+    def __init__(self, ):
+        pass
