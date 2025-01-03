@@ -1,2 +1,2 @@
-from .model import *
-from .module import *
+from .models.model import *
+from .modules.module import *

@@ -4,7 +4,7 @@ import yaml
 import torch
 from torch import nn, optim
 
-from .utils.res import ResourceManager
+from ..utils.res import ResourceManager
 
 
 class Model():
