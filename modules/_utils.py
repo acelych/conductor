@@ -1,3 +1,5 @@
+from typing import Tuple
+
 from torch import nn
 
 
@@ -13,3 +15,9 @@ def _convert_str2class(m_str: str, modules: dict):
         raise AssertionError(f"could not find any matching module for '{m_str}'")
     
     return m
+
+class BaseModule(nn.Module):
+    
+    @staticmethod
+    def yaml_args_parser(channels, former, modules, args) -> Tuple[int, int, list, dict]:
+        raise NotImplementedError

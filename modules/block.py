@@ -4,9 +4,9 @@ from torch import nn, Tensor
 from torchvision.ops import SqueezeExcitation as SElayer
 
 from .conv import ConvNormAct
-from ._utils import _convert_str2class
+from ._utils import _convert_str2class, BaseModule
 
-class InvertedResidual(nn.Module):
+class InvertedResidual(BaseModule):
     def __init__(self, c1, c2, ce, k, s, d, se, act):
         super().__init__()
         

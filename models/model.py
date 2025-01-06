@@ -1,9 +1,12 @@
 import os
 import yaml
+from typing import List
 
 import torch
-from torch import nn, optim
+from torch import nn, optim, Tensor
 
+from ..modules._utils import BaseModule
+from ..modules.module import ModuleProvider
 from ..utils.res import ResourceManager
 
 
@@ -28,23 +31,27 @@ class Model():
                 assert isinstance(model_desc[key], str)
             elif isinstance(task_pat[key], list):        # pat require list
                 assert isinstance(model_desc[key], list)
-                
-                if isinstance(task_pat[key][0], list):   # pat require list of list
-                    list_pat = task_pat[key][0]
-                    for row in model_desc[key]:
-                        assert isinstance(row, list) and len(row) == len(list_pat)
-                        for term, tar in zip(row, list_pat):
-                            if tar == 'int':
-                                assert isinstance(term, int)
-                            if tar == 'str':
-                                assert isinstance(term, str)
-                            if tar == 'list':
-                                assert isinstance(term, list)
                                 
-        self.model_desc = model_desc
+        self.model_desc: dict = model_desc
         
-    def build_model(self):
-        model = nn.Sequential()
+    def build_model(self, input_dim=3):
+        
+        channels = [input_dim]
+        layers: List[nn.Module] = []
+        layers_desc = self.model_desc.get("backbone") + self.model_desc.get("head")
+        
+        for i, (f, n, m, args) in enumerate(layers_desc):
+            m: BaseModule = ModuleProvider(m)
+            c1, c2, args, kwargs = m.yaml_args_parser(channels, f, ModuleProvider.get_modules(), args)
+            
+            if i == 0:
+                channels = [c2]
+            else:
+                channels.append(c2)
+                
+            layers.append(
+                nn.Sequential(*(m(*args, **kwargs) for _ in range(n))) if n > 1 else m(*args, **kwargs)
+            )
         
                     
                 

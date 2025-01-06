@@ -2,7 +2,7 @@ from typing import Sequence, Tuple, List
 
 from torch import nn, Tensor
 
-from ._utils import _convert_str2class
+from ._utils import _convert_str2class, BaseModule
 
 
 def autopad(k, p=None, d=1):
@@ -19,7 +19,7 @@ def autopad(k, p=None, d=1):
     return p
 
 
-class ConvNormAct(nn.Module):
+class ConvNormAct(BaseModule):
     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, d=1, norm=nn.BatchNorm2d, act=nn.SiLU):
         super().__init__()
         self.conv = nn.Conv2d(c1, c2, k, s, autopad(k, p, d), groups=g, dilation=d, bias=False)
@@ -40,3 +40,7 @@ class ConvNormAct(nn.Module):
         norm = _convert_str2class(args[1], modules)
         act = _convert_str2class(args[2], modules)
         return c1, c2, [c1] + args[0], {'norm': norm, 'act': act}
+    
+__all__ = [
+    "ConvNormAct"
+]

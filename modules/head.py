@@ -3,7 +3,9 @@ from typing import List, Tuple
 import torch
 from torch import nn, Tensor
 
-class Classifier(nn.Module):
+from ._utils import BaseModule
+
+class Classifier(BaseModule):
     def __init__(self, channel_in, num_classes, channel_expand, dropout: float = 0.2):
         super().__init__()
         
