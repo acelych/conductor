@@ -1,6 +1,6 @@
 import os
 import yaml
-from typing import List
+from typing import List, Iterable
 
 import torch
 from torch import nn, optim, Tensor
@@ -10,7 +10,18 @@ from ..modules.module import ModuleProvider
 from ..utils.res import ResourceManager
 
 
-class Model():
+class Model(nn.Module):
+    def __init__(self, layers: Iterable, save: Iterable):
+        super().__init__()
+        self.layers = layers
+        self.save = save
+                
+    def forward(self, x):
+        for layer in self.layers:
+            # TODO
+        
+
+class ModelManager():
     def __init__(self, yaml_path: str, task: str):
         self.task = task
         self.parse_yaml(yaml_path)
@@ -49,9 +60,9 @@ class Model():
             else:
                 channels.append(c2)
                 
-            layers.append(
-                nn.Sequential(*(m(*args, **kwargs) for _ in range(n))) if n > 1 else m(*args, **kwargs)
-            )
+            _m = nn.Sequential(*(m(*args, **kwargs) for _ in range(n))) if n > 1 else m(*args, **kwargs)
+            _m.p, _m.i, _m.f = sum(x.numel() for x in _m.parameters()), i, f
+            layers.append(_m)
         
                     
                 
