@@ -19,6 +19,7 @@ class Model(nn.Module):
     def forward(self, x):
         for layer in self.layers:
             # TODO
+            pass
         
 
 class ModelManager():
