@@ -1,6 +1,6 @@
 import os
 import yaml
-from typing import List, Iterable
+from typing import List, Set, Iterable
 
 import torch
 from torch import nn, optim, Tensor
@@ -17,9 +17,18 @@ class Model(nn.Module):
         self.save = save
                 
     def forward(self, x):
+        saved = dict()
         for layer in self.layers:
-            # TODO
-            pass
+            # forward
+            if x.f != -1:
+                x = layer(*(saved.get(i) for i in ([x.f] if isinstance(x.f, int) else x.f)))
+            else:
+                x = layer(x)
+                
+            # save layer's output
+            if x.i in self.save:
+                saved[x.i] = x
+        return x
         
 
 class ModelManager():
@@ -50,9 +59,13 @@ class ModelManager():
         
         channels = [input_dim]
         layers: List[nn.Module] = []
+        save: Set[int] = set()
         layers_desc = self.model_desc.get("backbone") + self.model_desc.get("head")
         
         for i, (f, n, m, args) in enumerate(layers_desc):
+            assert all(i >= x for x in ([f] if isinstance(f, int) else f)), f"expect former layers of layer {i}, got {f}"
+            assert n >= 1, f"expect n of layer {i} >= 1, got {n}"
+            
             m: BaseModule = ModuleProvider(m)
             c1, c2, args, kwargs = m.yaml_args_parser(channels, f, ModuleProvider.get_modules(), args)
             
@@ -61,9 +74,12 @@ class ModelManager():
             else:
                 channels.append(c2)
                 
+            save.union(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)
             _m = nn.Sequential(*(m(*args, **kwargs) for _ in range(n))) if n > 1 else m(*args, **kwargs)
             _m.p, _m.i, _m.f = sum(x.numel() for x in _m.parameters()), i, f
             layers.append(_m)
+            
+        return Model(nn.Sequential(*layers), sorted(list(save)))
         
                     
                 

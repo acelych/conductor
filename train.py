@@ -2,6 +2,8 @@ import torch
 from torch import nn, optim
 from torch.nn.parallel import DistributedDataParallel as DDP
 
+from .models import ModelManager
+
 class Trainer():
     def __init__(self):
         self.dataloader = None
@@ -23,5 +25,5 @@ class DistributedTrainer(Trainer):
         pass
     
 class TrainerManager():
-    def __init__(self, ):
+    def __init__(self, model_desc: str, ):
         pass
