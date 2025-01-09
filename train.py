@@ -1,6 +1,6 @@
 import torch.distributed as dist
 import torch.multiprocessing as mp
-from torch import nn, optim
+from torch import nn, optim, Tensor
 from torch.utils.data import DataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
 
@@ -21,8 +21,8 @@ class Trainer():
         
         model = self.model_mng.build_model()
         ddp_model = DDP(model, device_ids=[self.rank])
-        self.criterion = self.cd.criterion()
-        self.optimizer = self.cd.optimizer(model.parameters(), self.cd.learn_rate)
+        self.criterion: nn.Module = self.cd.criterion()
+        self.optimizer: optim.Optimizer = self.cd.optimizer(model.parameters(), self.cd.learn_rate)
         
         for epoch in range(self.cd.epochs):
             self.train_epoch(ddp_model, train_dataloader)
@@ -34,7 +34,7 @@ class Trainer():
         for x, label in dataloader:
             output = model(x)
             self.optimizer.zero_grad()
-            loss = self.criterion(output, label)
+            loss: Tensor = self.criterion(output, label)
             loss.backward()
             self.optimizer.step()
 
@@ -55,7 +55,7 @@ class TrainerManager():
     def __init__(self, cd: CommandDetails):
         self.model_mng = ModelManager(cd.model_yaml_path, cd.task)
         self.data_mng = DataLoaderManager(cd.data_yaml_path, cd)
-        self.logger = IndexLogger(cd.task)
+        self.logger = IndexLogger(cd, self.model_mng.model_desc)
         self.cd = cd
         
     def train(self):
