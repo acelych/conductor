@@ -3,6 +3,17 @@ from typing import List, Dict, Any
 
 class IndexLogger():
     
+    classify_indexes_init = {
+        'train_loss': [],
+        'train_top1': [],
+        'train_top5': [],
+        'val_loss': [],
+        'val_top1': [],
+        'val_top5': [],
+        'precision': [],
+        'recall': [],
+    }
+    
     detect_indexes_init = {
         'train_box_loss': [],
         'train_cls_loss': [],
@@ -16,16 +27,16 @@ class IndexLogger():
         'mAP50-95': [],
     }
 
-    def __init__(self, mission: str):
+    def __init__(self, task: str):
         self.timer = None
-        self.mission = mission
+        self.task = task
         self.indexes: Dict[str: List] = {
             'epoch': [],
             'time': [],
         }
-        if mission == 'classify':
-            pass
-        elif mission == 'detect':
+        if task == 'classify':
+            self.indexes.update(IndexLogger.classify_indexes_init)
+        elif task == 'detect':
             self.indexes.update(IndexLogger.detect_indexes_init)
 
     def start(self):

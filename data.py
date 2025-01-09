@@ -1,22 +1,26 @@
 import yaml
+from typing import Callable
 from pathlib import Path
 
 import cv2
 import pandas as pd
 import numpy as np
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset, DataLoader, DistributedSampler
+
+from .utils import CommandDetails, is_using_ddp
 
 
 class ClassifyDataset(Dataset):
-
     def __init__(self, data_path: str, mode: str):
         super().__init__()
         self.data_path = data_path
 
         if mode == 'parquet':
             self.data = pd.read_parquet(self.data_path)
-            self.__getitem__ = self._getitem_parquet
-            self.__len__ = self._len_of_all
+            self.__getitem__: Callable = self._getitem_parquet
+            self.__len__: Callable = self._len_of_all
+        else:
+            pass  #TODO
     
     def _len_of_all(self):
         return len(self.data)
@@ -27,9 +31,10 @@ class ClassifyDataset(Dataset):
         return cv2.imdecode(img, cv2.IMREAD_COLOR), label
 
 
-class UnifiedDataLoader:
-    def __init__(self, yaml_path: str, task: str):
-        pass
+class DataLoaderManager:
+    def __init__(self, yaml_path: str, cd: CommandDetails):
+        self.parse_yaml(yaml_path, cd.task)
+        self.cd = cd
             
     def parse_yaml(self, yaml_path: str, task: str):
         
@@ -60,3 +65,25 @@ class UnifiedDataLoader:
             self.val_data = ClassifyDataset(val_path, mode) if test_path != val_path else self.test_data
         else:
             pass  #TODO
+            
+        self.names = data_desc.get("names")
+        
+    def get_dataloader(self, stage: str, rank = None):
+        using_ddp = is_using_ddp(self.cd)
+        assert using_ddp and rank is not None, f"expect exact rank number for ddp training."
+        
+        if stage == "train":
+            dataset = self.train_data
+            shuffle = True
+        elif stage == "test":
+            dataset = self.test_data
+            shuffle = False
+        elif stage == "val":
+            dataset = self.val_data
+            shuffle = False
+        else:
+            raise AssertionError(f"expect legal stage (train, test, val), got {stage}")
+        
+        sampler = DistributedSampler(dataset, num_replicas=len(self.cd.world), rank=rank) if using_ddp else None
+        return DataLoader(dataset, batch_size=self.cd.batch_size, sampler=sampler, shuffle=shuffle)
+            
