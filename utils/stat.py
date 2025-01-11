@@ -106,7 +106,7 @@ class Recorder:
         dist.all_reduce(mean_loss, op=dist.ReduceOp.SUM)
         return (mean_loss / dist.get_world_size()).item()
 
-class IndexLogger:
+class IndexManager:
 
     class Index:
         def __init__(self, *args, **kwargs):
@@ -161,7 +161,7 @@ class IndexLogger:
         self.start_time = None
         self.cd = cd
         self.model_desc = model_desc
-        self.indexes: List[IndexLogger.Index] = []
+        self.indexes: List[IndexManager.Index] = []
         
     def __call__(self, index: Index):
         assert index.filled(), f"logger received an unfilled index"
