@@ -12,7 +12,11 @@ from .utils import CommandDetails, IndexManager, Recorder
 class Trainer():
     def __init__(self, rank: int, cd: CommandDetails, model_mng: ModelManager, data_mng: DataLoaderManager, idx_mng: IndexManager):
         torch.cuda.set_device(cd.world[rank])
-        dist.init_process_group("nccl", rank=rank, world_size=len(cd.world))
+        dist.init_process_group(
+            "nccl" if dist.is_nccl_available() else "gloo", 
+            rank=rank, 
+            world_size=len(cd.world)
+        )
         self.rank = rank
         self.cd = cd
         self.model_mng = model_mng
@@ -23,7 +27,7 @@ class Trainer():
         train_dataloader = self.data_mng.get_dataloader("train", rank=self.rank)
         val_dataloader = self.data_mng.get_dataloader("val", rank=self.rank)
         
-        model = self.model_mng.build_model().to(torch.cuda.current_device())
+        model = self.model_mng.build_model().to(torch.cuda.current_device())  # TODO: DDP replace .to()
         ddp_model = DDP(model, device_ids=[torch.cuda.current_device()])
         self.criterion: nn.Module = self.cd.criterion()
         self.optimizer: optim.Optimizer = self.cd.optimizer(model.parameters(), self.cd.learn_rate)

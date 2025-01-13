@@ -1,9 +1,12 @@
 import datetime
-from typing import Union
 from pathlib import Path
+from typing import Union, List
+from collections import namedtuple
 
 import pandas as pd
 from tqdm import tqdm
+
+LayerInfo = namedtuple('LayerInfo', ['idx', 'former', 'n', 'params', 'module', 'arguments'])
 
 def get_default_task_name(output_dir: Path):
     default_name = "task"
@@ -26,13 +29,28 @@ class Logger:
         self.console_logger_path = self.runs_dir / 'console.log'
         self.indexes_logger_path = self.runs_dir / 'indexes.csv'
 
-        self.console_log(f"Conductor --- {datetime.datetime.now()}\n")  # init console logger
+        self.info(f"Conductor --- {datetime.datetime.now()}\n")  # init console logger
         pd.DataFrame({k: [] for k in indexes_heads.keys()}).to_csv(self.indexes_logger_path, index=False)  # init indexes logger
 
-    def console_log(self, content: str):
-        print(content)
-        with open(self.console_logger_path, 'a') as f:
-            f.write(content + '\n')
+    def info(self, content: str):
+        if isinstance(content, str):
+            print(content)
+            with open(self.console_logger_path, 'a') as f:
+                f.write(content + '\n')
+                
+        elif isinstance(content, List):
+            self.info(f"\n{'':>3}{'from':>20}{'n':>3}{'params':>10}  {'module':<45}{'arguments':<30}")
+            for item in content:
+                assert isinstance(item, LayerInfo)
+                self.info(
+                    f"{item.idx:>3}{str(item.former):>20}"
+                    f"{item.n:>3}{item.params:10.0f}  "
+                    f"{item.module:<45}{str(item.arguments):<30}"
+                )
+                
 
-    def indexes_log(self, content: dict):
+    def index(self, content: dict):
         pd.DataFrame(content).to_csv(self.indexes_logger_path, mode='a', header=False, index=False)
+        
+    def info_nn_struct(self, content: pd.DataFrame):
+        content.to_dict
