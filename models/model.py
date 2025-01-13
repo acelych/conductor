@@ -76,7 +76,7 @@ class ModelManager():
                 
             save.union(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)
             _m = nn.Sequential(*(m(*args, **kwargs) for _ in range(n))) if n > 1 else m(*args, **kwargs)
-            _m.p, _m.i, _m.f = sum(x.numel() for x in _m.parameters()), i, f
+            _m.p, _m.i, _m.f, _m.t, _m.args = sum(x.numel() for x in _m.parameters()), i, f, m.__module__ + '.' + m.__name__, args
             layers.append(_m)
             
         return Model(nn.Sequential(*layers), sorted(list(save)))

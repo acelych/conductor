@@ -1,12 +1,9 @@
 import datetime
 from pathlib import Path
-from typing import Union, List
-from collections import namedtuple
+from typing import Union
 
 import pandas as pd
 from tqdm import tqdm
-
-LayerInfo = namedtuple('LayerInfo', ['idx', 'former', 'n', 'params', 'module', 'arguments'])
 
 def get_default_task_name(output_dir: Path):
     default_name = "task"
@@ -38,15 +35,8 @@ class Logger:
             with open(self.console_logger_path, 'a') as f:
                 f.write(content + '\n')
                 
-        elif isinstance(content, List):
-            self.info(f"\n{'':>3}{'from':>20}{'n':>3}{'params':>10}  {'module':<45}{'arguments':<30}")
-            for item in content:
-                assert isinstance(item, LayerInfo)
-                self.info(
-                    f"{item.idx:>3}{str(item.former):>20}"
-                    f"{item.n:>3}{item.params:10.0f}  "
-                    f"{item.module:<45}{str(item.arguments):<30}"
-                )
+        elif isinstance(content, list):                
+            (self.info(row) for row in content)
                 
 
     def index(self, content: dict):
