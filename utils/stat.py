@@ -5,7 +5,7 @@ import torch
 import torch.distributed as dist
 from torch import Tensor
 
-from .cmd import CommandDetails
+from .cli import CommandDetails
 
 class Calculate:
     @staticmethod
@@ -171,5 +171,6 @@ class IndexManager:
         self.start_time = time.time()
         
     def get_time(self) -> float:
+        assert self.start_time is not None, f"expect a start time for comparison"
         return time.time() - self.start_time
         

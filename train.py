@@ -5,11 +5,13 @@ from torch import nn, optim, Tensor
 from torch.utils.data import DataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
 
+from .utils.cli import CommandDetails
+
 from .models import ModelManager
 from .data import DataLoaderManager
-from .utils import CommandDetails, IndexManager, Recorder
+from .utils import IndexManager, Recorder
 
-class Trainer():
+class Trainer:
     def __init__(self, rank: int, cd: CommandDetails, model_mng: ModelManager, data_mng: DataLoaderManager, idx_mng: IndexManager):
         torch.cuda.set_device(cd.world[rank])
         dist.init_process_group(
@@ -23,28 +25,30 @@ class Trainer():
         self.data_mng = data_mng
         self.idx_mng = idx_mng
         
-    def main_work(self):
+    def train(self):
         train_dataloader = self.data_mng.get_dataloader("train", rank=self.rank)
         val_dataloader = self.data_mng.get_dataloader("val", rank=self.rank)
         
-        model = self.model_mng.build_model().to(torch.cuda.current_device())  # TODO: DDP replace .to()
+        model = self.model_mng.build_model()
         ddp_model = DDP(model, device_ids=[torch.cuda.current_device()])
         self.criterion: nn.Module = self.cd.criterion()
-        self.optimizer: optim.Optimizer = self.cd.optimizer(model.parameters(), self.cd.learn_rate)
+        self.optimizer: optim.Optimizer = self.cd.build_optimizer(ddp_model.parameters())
         
         for epoch in range(self.cd.epochs):
             self.idx_mng.start()
             
             if self.cd.task == "classify":
-                index = IndexManager.ClassifyIndex(epoch=epoch, time=self.idx_mng.get_time())
+                index = IndexManager.ClassifyIndex(epoch=epoch)
             elif self.cd.task == "detect":
-                index = IndexManager.DetectIndex(epoch=epoch, time=self.idx_mng.get_time())
+                index = IndexManager.DetectIndex(epoch=epoch)
             
             # learn & val
             self.train_epoch(ddp_model, train_dataloader, index)
             dist.barrier()
             self.val_epoch(ddp_model, val_dataloader, index)
             
+            # done, get time & commit
+            index.time = self.idx_mng.get_time()
             self.idx_mng(index)
     
     def train_epoch(self, model: DDP, dataloader: DataLoader, index: IndexManager.Index):
@@ -81,10 +85,10 @@ class Trainer():
     @staticmethod
     def init_trainer(rank, cd: CommandDetails, model_mng: ModelManager, data_mng: DataLoaderManager, idx_mng: IndexManager):
         trainer = Trainer(rank, cd, model_mng, data_mng, idx_mng)
-        trainer.main_work()
+        trainer.train()
 
     
-class TrainerManager():
+class TrainerManager:
     def __init__(self, cd: CommandDetails):
         self.model_mng = ModelManager(cd.model_yaml_path, cd.task)
         self.data_mng = DataLoaderManager(cd.data_yaml_path, cd)

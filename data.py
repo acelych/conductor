@@ -7,7 +7,9 @@ import pandas as pd
 import numpy as np
 from torch.utils.data import Dataset, DataLoader, DistributedSampler
 
-from .utils import CommandDetails, is_using_ddp
+from .utils.cli import CommandDetails
+
+from .utils.cli import is_using_ddp
 
 
 class ClassifyDataset(Dataset):
