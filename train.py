@@ -5,7 +5,7 @@ from torch import nn, optim, Tensor
 from torch.utils.data import DataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from .utils.cli import CommandDetails
+from .utils.cli import CommandDetails, LR_Scheduler
 
 from .models import ModelManager
 from .data import DataLoaderManager
@@ -33,22 +33,19 @@ class Trainer:
         ddp_model = DDP(model, device_ids=[torch.cuda.current_device()])
         self.criterion: nn.Module = self.cd.criterion()
         self.optimizer: optim.Optimizer = self.cd.build_optimizer(ddp_model.parameters())
+        self.scheduler: LR_Scheduler = self.cd.build_scheduler(self.optimizer, len(train_dataloader))
+        
+        self.idx_mng.start()
         
         for epoch in range(self.cd.epochs):
-            self.idx_mng.start()
-            
-            if self.cd.task == "classify":
-                index = IndexManager.ClassifyIndex(epoch=epoch)
-            elif self.cd.task == "detect":
-                index = IndexManager.DetectIndex(epoch=epoch)
+            index = self.idx_mng.get_index(epoch)
             
             # learn & val
             self.train_epoch(ddp_model, train_dataloader, index)
             dist.barrier()
             self.val_epoch(ddp_model, val_dataloader, index)
             
-            # done, get time & commit
-            index.time = self.idx_mng.get_time()
+            # done
             self.idx_mng(index)
     
     def train_epoch(self, model: DDP, dataloader: DataLoader, index: IndexManager.Index):

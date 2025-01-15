@@ -164,6 +164,7 @@ class IndexManager:
         self.indexes: List[IndexManager.Index] = []
         
     def __call__(self, index: Index):
+        index.time = self.get_time()  # record submission time (comparing with start)
         assert index.filled(), f"logger received an unfilled index"
         self.indexes.append(index)
 
@@ -173,4 +174,10 @@ class IndexManager:
     def get_time(self) -> float:
         assert self.start_time is not None, f"expect a start time for comparison"
         return time.time() - self.start_time
+    
+    def get_index(self, epoch: int):
+        if self.cd.task == 'classify':
+            return IndexManager.ClassifyIndex(epoch=epoch)
+        if self.cd.task == 'detect':
+            return IndexManager.DetectIndex(epoch=epoch)
         
