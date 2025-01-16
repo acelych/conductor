@@ -9,10 +9,10 @@ from .utils.cli import CommandDetails, LR_Scheduler
 
 from .models import ModelManager
 from .data import DataLoaderManager
-from .utils import IndexManager, Recorder
+from .utils import MetricsManager, Recorder
 
 class Trainer:
-    def __init__(self, rank: int, cd: CommandDetails, model_mng: ModelManager, data_mng: DataLoaderManager, idx_mng: IndexManager):
+    def __init__(self, rank: int, cd: CommandDetails, model_mng: ModelManager, data_mng: DataLoaderManager, met_mng: MetricsManager):
         torch.cuda.set_device(cd.world[rank])
         dist.init_process_group(
             "nccl" if dist.is_nccl_available() else "gloo", 
@@ -23,7 +23,7 @@ class Trainer:
         self.cd = cd
         self.model_mng = model_mng
         self.data_mng = data_mng
-        self.idx_mng = idx_mng
+        self.met_mng = met_mng
         
     def train(self):
         train_dataloader = self.data_mng.get_dataloader("train", rank=self.rank)
@@ -35,20 +35,23 @@ class Trainer:
         self.optimizer: optim.Optimizer = self.cd.build_optimizer(ddp_model.parameters())
         self.scheduler: LR_Scheduler = self.cd.build_scheduler(self.optimizer, len(train_dataloader))
         
-        self.idx_mng.start()
+        self.recorder: Recorder = Recorder(self.model_mng.model_desc.get("nc"))
+        self.met_mng.start()
         
         for epoch in range(self.cd.epochs):
-            index = self.idx_mng.get_index(epoch)
+            metrics = self.met_mng.get_index(epoch)
             
             # learn & val
-            self.train_epoch(ddp_model, train_dataloader, index)
-            dist.barrier()
-            self.val_epoch(ddp_model, val_dataloader, index)
+            self.train_epoch(ddp_model, train_dataloader, metrics)
+            val_loss = self.val_epoch(ddp_model, val_dataloader, metrics)
+            
+            # scheduler
+            self.step_scheduler(val_loss)
             
             # done
-            self.idx_mng(index)
+            self.met_mng(metrics)
     
-    def train_epoch(self, model: DDP, dataloader: DataLoader, index: IndexManager.Index):
+    def train_epoch(self, model: DDP, dataloader: DataLoader, metrics: MetricsManager.Metrics):
         model.train()
         losses = []
         for x, label in dataloader:
@@ -62,25 +65,31 @@ class Trainer:
         
         # let one of the gpu fill the blanks
         if dist.get_rank() == 0:
-            index.record_train(mean_loss)
-        dist.barrier()  # wait till it's done
+            metrics.record_train(mean_loss)
 
-    def val_epoch(self, model: nn.Module, dataloader: DataLoader, index: IndexManager.Index):
+    def val_epoch(self, model: nn.Module, dataloader: DataLoader, metrics: MetricsManager.Metrics):
         model.eval()
-        recorder = Recorder(self.model_mng.model_desc.get("nc"))
+        self.recorder.clear()
         for x, label in dataloader:
             output = model(x)
             loss = self.criterion(output, label)
-            recorder(output, label, loss)
-        recorder.converge()
+            self.recorder(output, label, loss)
+        self.recorder.converge()
         
         # let one of the gpu fill the blanks
         if dist.get_rank() == 0:
-            index.record_val(recorder)
-        dist.barrier()  # wait till it's done
+            metrics.record_val(self.recorder)
+            
+        return self.recorder.get_mean_loss()
+    
+    def step_scheduler(self, val_loss: Tensor):
+        if isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
+            self.scheduler.step(metrics=val_loss)
+        else:
+            self.scheduler.step()
             
     @staticmethod
-    def init_trainer(rank, cd: CommandDetails, model_mng: ModelManager, data_mng: DataLoaderManager, idx_mng: IndexManager):
+    def init_trainer(rank, cd: CommandDetails, model_mng: ModelManager, data_mng: DataLoaderManager, idx_mng: MetricsManager):
         trainer = Trainer(rank, cd, model_mng, data_mng, idx_mng)
         trainer.train()
 
@@ -89,8 +98,8 @@ class TrainerManager:
     def __init__(self, cd: CommandDetails):
         self.model_mng = ModelManager(cd.model_yaml_path, cd.task)
         self.data_mng = DataLoaderManager(cd.data_yaml_path, cd)
-        self.idx_mng = IndexManager(cd, self.model_mng.model_desc)
+        self.met_mng = MetricsManager(cd, self.model_mng.model_desc)
         self.cd = cd
         
     def train(self):
-        mp.spawn(Trainer.init_trainer, args=(self.cd, self.model_mng, self.data_mng, self.idx_mng), nprocs=len(self.cd.world), join=True)
+        mp.spawn(Trainer.init_trainer, args=(self.cd, self.model_mng, self.data_mng, self.met_mng), nprocs=len(self.cd.world), join=True)

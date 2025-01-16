@@ -11,10 +11,11 @@ from ..utils.res import ResourceManager
 
 
 class Model(nn.Module):
-    def __init__(self, layers: Iterable, save: Iterable):
+    def __init__(self, layers: nn.Sequential, save: list):
         super().__init__()
-        self.layers = layers
-        self.save = save
+        self.layers: nn.Sequential = layers
+        self.save: list = save
+        self.apply(self._init_weights)
                 
     def forward(self, x):
         saved = dict()
@@ -29,6 +30,15 @@ class Model(nn.Module):
             if x.i in self.save:
                 saved[x.i] = x
         return x
+    
+    def _init_weights(self, m):
+        if isinstance(m, (nn.Linear, nn.Conv2d)):
+            nn.init.xavier_normal_(m.weight)
+            if isinstance(m, nn.Linear) and m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+        elif isinstance(m, (nn.LayerNorm, nn.BatchNorm2d)):
+            nn.init.constant_(m.bias, 0)
+            nn.init.constant_(m.weight, 1.0)
         
 
 class ModelManager():

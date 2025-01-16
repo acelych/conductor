@@ -116,11 +116,13 @@ class CommandDetails:
             adjust lr according to val loss, reduce lr when metrics remains stagnant
             universal, adaptive, avoiding premature lr decline
         '''
-        if self.scheduler in [optim.lr_scheduler.StepLR, optim.lr_scheduler.ReduceLROnPlateau]:
+        if self.scheduler in [optim.lr_scheduler.ReduceLROnPlateau]:
             sch_instance = self.scheduler(optimizer=opt, **kwargs)
-        elif self.scheduler == optim.lr_scheduler.CosineAnnealingLR:
+        elif self.scheduler is optim.lr_scheduler.StepLR:
+            sch_instance = self.scheduler(optimizer=opt, step_size=int(self.epochs * 0.1), **kwargs)
+        elif self.scheduler is optim.lr_scheduler.CosineAnnealingLR:
             sch_instance = self.scheduler(optimizer=opt, T_max=self.epochs, eta_min=1e-6, **kwargs)
-        elif self.scheduler == optim.lr_scheduler.OneCycleLR:
+        elif self.scheduler is optim.lr_scheduler.OneCycleLR:
             sch_instance = self.scheduler(optimizer=opt, max_lr=0.01, steps_per_epoch=steps_per_epoch, total_steps=self.epochs, **kwargs)
         else:
             raise AssertionError(f"unexpected scheduler '{self.scheduler.__name__}'")

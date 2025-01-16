@@ -52,8 +52,8 @@ class Recorder:
     def __init__(self, num_classes: int, k: int = 5):
         self.device = torch.cuda.current_device()
         self.loss: list = []
-        self.conf_mat: Tensor = torch.zeros((num_classes, num_classes), dtype=torch.int32, device=self.device)
         self.topk: list = []
+        self.conf_mat: Tensor = torch.zeros((num_classes, num_classes), dtype=torch.int32, device=self.device)
         self.k: int = k
         
         self.mean_loss = None
@@ -64,6 +64,14 @@ class Recorder:
         self.loss.append(loss.item())
         self.topk.append(Calculate.topk_accuracy(output, label, self.k))
         Calculate.update_conf_mat(self.conf_mat, output, label)
+        
+    def clear(self):
+        self.loss.clear()
+        self.topk.clear()
+        self.conf_mat.zero_()
+        self.mean_loss = None
+        self.mean_topk = None
+        self.is_converged = False
         
     def converge(self):
         '''
@@ -106,9 +114,9 @@ class Recorder:
         dist.all_reduce(mean_loss, op=dist.ReduceOp.SUM)
         return (mean_loss / dist.get_world_size()).item()
 
-class IndexManager:
+class MetricsManager:
 
-    class Index:
+    class Metrics:
         def __init__(self, *args, **kwargs):
             self.epoch = kwargs.get('epoch')
             self.time = kwargs.get('time')
@@ -122,7 +130,7 @@ class IndexManager:
         def record_val(self, recorder: Recorder):
             raise NotImplementedError
         
-    class ClassifyIndex(Index):
+    class ClassifyMetrics(Metrics):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self.train_loss = kwargs.get('train_loss')
@@ -143,7 +151,7 @@ class IndexManager:
             self.recall = Calculate.recall(recorder.get_conf_mat())
             
             
-    class DetectIndex(Index):
+    class DetectMetrics(Metrics):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             self.train_box_loss = kwargs.get("train_box_loss")
@@ -161,9 +169,9 @@ class IndexManager:
         self.start_time = None
         self.cd = cd
         self.model_desc = model_desc
-        self.indexes: List[IndexManager.Index] = []
+        self.indexes: List[MetricsManager.Metrics] = []
         
-    def __call__(self, index: Index):
+    def __call__(self, index: Metrics):
         index.time = self.get_time()  # record submission time (comparing with start)
         assert index.filled(), f"logger received an unfilled index"
         self.indexes.append(index)
@@ -177,7 +185,7 @@ class IndexManager:
     
     def get_index(self, epoch: int):
         if self.cd.task == 'classify':
-            return IndexManager.ClassifyIndex(epoch=epoch)
+            return MetricsManager.ClassifyMetrics(epoch=epoch)
         if self.cd.task == 'detect':
-            return IndexManager.DetectIndex(epoch=epoch)
+            return MetricsManager.DetectMetrics(epoch=epoch)
         
