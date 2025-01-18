@@ -1,9 +1,11 @@
-from typing import Tuple
+from typing import Tuple, Union
 from copy import deepcopy
 
 import thop
 import torch
-from torch import nn
+from torch import nn, optim
+
+LR_Scheduler = Union[optim.lr_scheduler.LRScheduler, optim.lr_scheduler.ReduceLROnPlateau]
 
 def get_model_info(model: nn.Module, imgsz=640) -> Tuple[str, Tuple]:
     if not isinstance(imgsz, list):

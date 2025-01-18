@@ -183,7 +183,7 @@ class MetricsManager:
         assert self.start_time is not None, f"expect a start time for comparison"
         return time.time() - self.start_time
     
-    def get_index(self, epoch: int):
+    def get_metrics_holder(self, epoch: int):
         if self.cd.task == 'classify':
             return MetricsManager.ClassifyMetrics(epoch=epoch)
         if self.cd.task == 'detect':

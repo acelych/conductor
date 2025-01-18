@@ -4,17 +4,17 @@ from pathlib import Path
 from typing import Union
 
 import pandas as pd
+import torch
 from torch import cuda, nn, optim
 from tqdm import tqdm
 
 from .res import ResourceManager
-
-LR_Scheduler = Union[optim.lr_scheduler.LRScheduler, optim.lr_scheduler.ReduceLROnPlateau]
+from .misc import LR_Scheduler
 
 ## ========== CONSOLE OUTPUTS FORMAT ========== ##
 
 class Logger:
-    def __init__(self, output_dir: Union[str, Path], indexes_heads: dict, task_name: str = None):
+    def __init__(self, output_dir: Union[str, Path], metrics_heads: dict, task_name: str = None):
         output_dir = Path(output_dir) if isinstance(output_dir, str) else output_dir
         assert output_dir.exists(), f"output directory '{output_dir.__str__}' is not exist"
 
@@ -24,10 +24,15 @@ class Logger:
         self.runs_dir = output_dir / task_name
         self.runs_dir.mkdir()
         self.console_logger_path = self.runs_dir / 'console.log'
-        self.indexes_logger_path = self.runs_dir / 'indexes.csv'
+        self.metrics_logger_path = self.runs_dir / 'metrics.csv'
+        self.weights_dir = self.runs_dir / 'weights'
+        self.weights_dir.mkdir()
+        self.best = self.weights_dir / 'best.pt'
+        self.last = self.weights_dir / 'last.pt'
+        self.save_fitness = None
 
         self.info(f"Conductor --- {datetime.datetime.now()}\n")  # init console logger
-        pd.DataFrame({k: [] for k in indexes_heads.keys()}).to_csv(self.indexes_logger_path, index=False)  # init indexes logger
+        pd.DataFrame({k: [] for k in metrics_heads.keys()}).to_csv(self.metrics_logger_path, index=False)  # init indexes logger
 
     def info(self, content: str):
         if isinstance(content, str):
@@ -39,11 +44,8 @@ class Logger:
             (self.info(row) for row in content)
                 
 
-    def index(self, content: dict):
-        pd.DataFrame(content).to_csv(self.indexes_logger_path, mode='a', header=False, index=False)
-        
-    def info_nn_struct(self, content: pd.DataFrame):
-        content.to_dict
+    def metrics(self, content: dict):
+        pd.DataFrame(content).to_csv(self.metrics_logger_path, mode='a', header=False, index=False)
 
 
 def get_default_task_name(output_dir: Path):
