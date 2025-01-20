@@ -7,7 +7,7 @@ import pandas as pd
 import numpy as np
 from torch.utils.data import Dataset, DataLoader, DistributedSampler
 
-from .utils.cli import CommandDetails
+from .utils.cli import InstructDetails
 
 from .utils.cli import is_using_ddp
 
@@ -34,9 +34,9 @@ class ClassifyDataset(Dataset):
 
 
 class DataLoaderManager:
-    def __init__(self, yaml_path: str, cd: CommandDetails):
-        self.parse_yaml(yaml_path, cd.task)
-        self.cd = cd
+    def __init__(self, yaml_path: str, id: InstructDetails):
+        self.parse_yaml(yaml_path, id.task)
+        self.id = id
             
     def parse_yaml(self, yaml_path: str, task: str):
         
@@ -71,7 +71,7 @@ class DataLoaderManager:
         self.names = data_desc.get("names")
         
     def get_dataloader(self, stage: str, rank = None):
-        using_ddp = is_using_ddp(self.cd)
+        using_ddp = is_using_ddp(self.id)
         assert using_ddp and rank is not None, f"expect exact rank number for ddp training."
         
         if stage == "train":
@@ -86,6 +86,6 @@ class DataLoaderManager:
         else:
             raise AssertionError(f"expect legal stage (train, test, val), got {stage}")
         
-        sampler = DistributedSampler(dataset, num_replicas=len(self.cd.world), rank=rank) if using_ddp else None
-        return DataLoader(dataset, batch_size=self.cd.batch_size, sampler=sampler, shuffle=shuffle)
+        sampler = DistributedSampler(dataset, num_replicas=len(self.id.world), rank=rank) if using_ddp else None
+        return DataLoader(dataset, batch_size=self.id.batch_size, sampler=sampler, shuffle=shuffle)
             

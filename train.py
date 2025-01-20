@@ -6,29 +6,29 @@ from torch.utils.data import DataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
 
 from .utils.misc import LR_Scheduler
-from .utils.cli import CommandDetails
+from .utils.cli import InstructDetails
 
-from .models import ModelManager
+from .model import ModelManager
 from .data import DataLoaderManager
 from .utils import MetricsManager, Recorder, Logger
 
 class Trainer:
     def __init__(self, 
                  rank: int, 
-                 cd: CommandDetails, 
+                 id: InstructDetails, 
                  model_mng: ModelManager, 
                  data_mng: DataLoaderManager, 
                  met_mng: MetricsManager, 
                  logger: Logger,
                  ckpt: dict = None):
-        torch.cuda.set_device(cd.world[rank])
+        torch.cuda.set_device(id.world[rank])
         dist.init_process_group(
             "nccl" if dist.is_nccl_available() else "gloo", 
             rank=rank, 
-            world_size=len(cd.world)
+            world_size=len(id.world)
         )
         self.rank = rank
-        self.cd = cd
+        self.id = id
         self.model_mng = model_mng
         self.data_mng = data_mng
         self.met_mng = met_mng
@@ -41,15 +41,15 @@ class Trainer:
         
         model = self.model_mng.build_model()
         self.model = DDP(model, device_ids=[torch.cuda.current_device()])
-        self.criterion: nn.Module = self.cd.criterion()
-        self.optimizer: optim.Optimizer = self.cd.build_optimizer(self.model.parameters())
-        self.scheduler: LR_Scheduler = self.cd.build_scheduler(self.optimizer, len(train_dataloader))
+        self.criterion: nn.Module = self.id.criterion()
+        self.optimizer: optim.Optimizer = self.id.build_optimizer(self.model.parameters())
+        self.scheduler: LR_Scheduler = self.id.build_scheduler(self.optimizer, len(train_dataloader))
 
         self.recorder: Recorder = Recorder(self.model_mng.model_desc.get("nc"))
         self.best_fitness = None
         self.met_mng.start()
         
-        for self.epoch in range(self.load_state(), self.cd.epochs):
+        for self.epoch in range(self.load_state(), self.id.epochs):
             metrics = self.met_mng.get_metrics_holder(self.epoch)
             
             # learn & val
@@ -135,17 +135,17 @@ class Trainer:
             return 0
             
     @staticmethod
-    def init_trainer(rank, cd: CommandDetails, model_mng: ModelManager, data_mng: DataLoaderManager, idx_mng: MetricsManager):
-        trainer = Trainer(rank, cd, model_mng, data_mng, idx_mng)
+    def init_trainer(rank, id: InstructDetails, model_mng: ModelManager, data_mng: DataLoaderManager, idx_mng: MetricsManager):
+        trainer = Trainer(rank, id, model_mng, data_mng, idx_mng)
         trainer.train()
 
     
 class TrainerManager:
-    def __init__(self, cd: CommandDetails):
-        self.model_mng = ModelManager(cd.model_yaml_path, cd.task)
-        self.data_mng = DataLoaderManager(cd.data_yaml_path, cd)
-        self.met_mng = MetricsManager(cd, self.model_mng.model_desc)
-        self.cd = cd
+    def __init__(self, id: InstructDetails):
+        self.model_mng = ModelManager(id.model_yaml_path, id.task)
+        self.data_mng = DataLoaderManager(id.data_yaml_path, id)
+        self.met_mng = MetricsManager(id, self.model_mng.model_desc)
+        self.id = id
         
     def train(self):
-        mp.spawn(Trainer.init_trainer, args=(self.cd, self.model_mng, self.data_mng, self.met_mng), nprocs=len(self.cd.world), join=True)
+        mp.spawn(Trainer.init_trainer, args=(self.id, self.model_mng, self.data_mng, self.met_mng), nprocs=len(self.id.world), join=True)

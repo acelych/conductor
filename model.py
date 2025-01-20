@@ -5,9 +5,9 @@ from typing import List, Set, Iterable
 import torch
 from torch import nn, optim, Tensor
 
-from ..modules._utils import BaseModule
-from ..modules.module import ModuleProvider
-from ..utils.res import ResourceManager
+from .modules._utils import BaseModule
+from .modules.module import ModuleProvider
+from .utils import ResourceManager
 
 
 class Model(nn.Module):

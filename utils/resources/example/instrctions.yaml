@@ -1,0 +1,23 @@
+# example of instruction yaml
+
+# basics
+model_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/utils/resources/example/mobilenetv3.yaml
+data_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/temp/cifar100.yaml
+command: train
+task: classify
+
+# training details
+epochs: 300
+batch_size: 32
+device: cuda
+world: '[0]'
+criterion: CrossEntropyLoss  # below: within default
+optimizer: AdamW
+scheduler: ReduceLROnPlateau
+learn_rate: 0.001
+momentum: 0.9
+decay: 1e-5
+
+# logging & ckpt details
+output_dir: C:/Workspace/DataScience/ComputerVision/conductor/temp/
+taskdir_name: exp

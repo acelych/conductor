@@ -1,2 +1,5 @@
-from .models.model import *
-from .modules.module import *
+from .model import *
+from .modules import *
+from .utils import *
+from .data import *
+from .train import *

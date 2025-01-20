@@ -1,3 +1,4 @@
+from .resources import *
 from .cli import *
-from .res import *
+from .misc import *
 from .stat import *
