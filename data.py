@@ -8,7 +8,6 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader, DistributedSampler
 
 from .utils.cli import InstructDetails
-
 from .utils.cli import is_using_ddp
 
 
@@ -47,7 +46,7 @@ class DataLoaderManager:
             
         dataset_path = Path(data_desc.get('path'))
         if not dataset_path.is_absolute():
-            dataset_path = yaml_path / dataset_path
+            dataset_path = Path(yaml_path).parent / dataset_path
 
         if not data_desc.get("test"):
             data_desc["test"] = data_desc.get("val")

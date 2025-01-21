@@ -7,6 +7,16 @@ from torch import nn, optim
 
 LR_Scheduler = Union[optim.lr_scheduler.LRScheduler, optim.lr_scheduler.ReduceLROnPlateau]
 
+def get_module_class_str(obj: object) -> str:
+    if not isinstance(obj, type):
+        obj = obj.__class__
+    module_str = obj.__module__
+    class_str = obj.__name__
+    if module_str != '__main__':
+        return '.'.join((module_str, class_str))
+    else:
+        return class_str
+
 def get_model_info(model: nn.Module, imgsz=640) -> Tuple[str, Tuple]:
     if not isinstance(imgsz, list):
         imgsz = [imgsz, imgsz]  # expand if int/float

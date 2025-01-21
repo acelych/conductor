@@ -1,4 +1,5 @@
 import yaml
+import shutil
 import datetime
 from pathlib import Path
 from typing import Union
@@ -9,31 +10,35 @@ from torch import cuda, nn, optim
 from tqdm import tqdm
 
 from .resources import ResourceManager
-from .misc import LR_Scheduler
+from .misc import LR_Scheduler, get_module_class_str
 
 ## ========== CONSOLE OUTPUTS FORMAT ========== ##
 
 class Logger:
-    def __init__(self, output_dir: Union[str, Path], taskdir_name: str = None):
+    def __init__(self, output_dir: Union[str, Path], taskdir_name: str = None, ckpt_path: str = None):
         output_dir = Path(output_dir) if isinstance(output_dir, str) else output_dir
         assert output_dir.exists(), f"output directory '{output_dir.__str__}' is not exist"
 
         if taskdir_name is None:
             taskdir_name = get_default_taskdir_name(output_dir)
 
-        self.runs_dir = output_dir / taskdir_name
-        self.runs_dir.mkdir()
-        self.console_logger_path = self.runs_dir / 'console.log'
-        self.metrics_logger_path = self.runs_dir / 'metrics.csv'
-        self.weights_dir = self.runs_dir / 'weights'
+        self.taskdir = output_dir / taskdir_name
+        if self.taskdir.exists():
+            shutil.rmtree(self.taskdir)
+        self.taskdir.mkdir()
+
+        self.console_logger_path = self.taskdir / 'console.log'
+        self.metrics_logger_path = self.taskdir / 'metrics.csv'
+        self.weights_dir = self.taskdir / 'weights'
         self.weights_dir.mkdir()
         self.best = self.weights_dir / 'best.pt'
         self.last = self.weights_dir / 'last.pt'
         self.save_fitness = None
 
-    def start(self, metrics_heads: dict):
         self.info(f"Conductor --- {datetime.datetime.now()}\n")  # init console logger
-        pd.DataFrame({k: [] for k in metrics_heads.keys()}).to_csv(self.metrics_logger_path, index=False)  # init indexes logger
+
+    def init_metrics(self, metrics_heads: tuple):
+        pd.DataFrame({k: [] for k in metrics_heads}).to_csv(self.metrics_logger_path, index=False)  # init indexes logger
 
     def info(self, content: str):
         if isinstance(content, str):
@@ -43,7 +48,6 @@ class Logger:
                 
         elif isinstance(content, list):                
             (self.info(row) for row in content)
-                
 
     def metrics(self, content: dict):
         pd.DataFrame(content).to_csv(self.metrics_logger_path, mode='a', header=False, index=False)
@@ -76,6 +80,7 @@ class InstructDetails:
         decay: float = 1e-5,
         batch_size: int = None,
         epochs: int = 300,
+        **kwargs,  # accept unexpected args
         ):
         self.model_yaml_path: str = model_yaml_path
         self.data_yaml_path: str = data_yaml_path
@@ -91,6 +96,14 @@ class InstructDetails:
         self.decay = float(decay)
         self.batch_size = batch_size if batch_size else (len(world) * 16 if world else 16)
         self.epochs = int(epochs)
+
+    def logging(self, logger: Logger):
+        info = "#-- Task Arguments --#\n"
+        for k, v in vars(self).items():
+            if v.__class__ not in [str, list, float, int]:
+                v = get_module_class_str(v)
+            info += f"{k}: {v}\n"
+        logger.info(info)
         
     def build_optimizer(self, model: nn.Module):
         if self.optimizer in [optim.Adam, optim.AdamW, optim.Adamax, optim.NAdam, optim.RAdam]:
@@ -178,21 +191,21 @@ class InstructDetails:
         criterion: str = kwargs.get('criterion')
         if criterion:
             criterion_cls = getattr(nn, criterion.lstrip('nn.'), None)
-            assert criterion_cls, f"unexpected criterion '{criterion.__name__}'"
+            assert criterion_cls, f"unexpected criterion '{criterion}'"
         kwargs['criterion'] = criterion_cls
         
         # optimizer
         optimizer: str = kwargs.get('optimizer')
         if optimizer:
             optimizer_cls = getattr(optim, optimizer.lstrip('optim.'), None)
-            assert optimizer_cls, f"unexpected optimizer '{optimizer.__name__}'"
+            assert optimizer_cls, f"unexpected optimizer '{optimizer}'"
         kwargs['optimizer'] = optimizer_cls
         
         # scheduler
         scheduler: str = kwargs.get('scheduler')
         if scheduler:
-            scheduler_cls = getattr(optim.lr_scheduler, optimizer.lstrip('optim.').lstrip('lr_scheduler.'), None)
-            assert scheduler_cls, f"unexpected scheduler '{scheduler.__name__}'"
+            scheduler_cls = getattr(optim.lr_scheduler, scheduler.lstrip('optim.').lstrip('lr_scheduler.'), None)
+            assert scheduler_cls, f"unexpected scheduler '{scheduler}'"
         kwargs['scheduler'] = scheduler_cls
 
         # batch_size

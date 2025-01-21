@@ -27,6 +27,8 @@ class Conductor:
         self.data_mng = DataLoaderManager(self.id.data_yaml_path, self.id)
         self.met_mng = MetricsManager(self.id, self.model_mng.model_desc)
         
-        self.logger.start(metrics_heads=self.met_mng.get_metrics_holder().get_heads())
+        self.logger.init_metrics(metrics_heads=self.met_mng.get_metrics_holder().get_heads())
+        self.id.logging(self.logger)
+        
 
         

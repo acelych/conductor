@@ -21,3 +21,4 @@ decay: 1e-5
 # logging & ckpt details
 output_dir: C:/Workspace/DataScience/ComputerVision/conductor/temp/
 taskdir_name: exp
+ckpt: null

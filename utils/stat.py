@@ -121,13 +121,13 @@ class MetricsManager:
             self.epoch = kwargs.get('epoch')
             self.time = kwargs.get('time')
             
-        def filled(self):
+        def filled(self) -> bool:
             return all(v is not None for v in vars(self).values())
         
-        def get_heads(self):
-            return (v for v in vars(self).values())
+        def get_heads(self) -> tuple:
+            return tuple(vars(self).keys())
         
-        def record_train(self, loss):
+        def record_train(self, loss: Tensor):
             raise NotImplementedError
         
         def record_val(self, recorder: Recorder):
