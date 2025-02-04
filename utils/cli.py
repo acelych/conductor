@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Union
 
 import pandas as pd
-import torch
 from torch import cuda, nn, optim
 from tqdm import tqdm
 
@@ -15,7 +14,7 @@ from .misc import LR_Scheduler, get_module_class_str
 ## ========== CONSOLE OUTPUTS FORMAT ========== ##
 
 class Logger:
-    def __init__(self, output_dir: Union[str, Path], taskdir_name: str = None, ckpt_path: str = None):
+    def __init__(self, output_dir: Union[str, Path], taskdir_name: str = None):
         output_dir = Path(output_dir) if isinstance(output_dir, str) else output_dir
         assert output_dir.exists(), f"output directory '{output_dir.__str__}' is not exist"
 
@@ -98,7 +97,7 @@ class InstructDetails:
         self.epochs = int(epochs)
 
     def logging(self, logger: Logger):
-        info = "#-- Task Arguments --#\n"
+        info = "### Task Arguments ###\n"
         for k, v in vars(self).items():
             if v.__class__ not in [str, list, float, int]:
                 v = get_module_class_str(v)
