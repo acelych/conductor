@@ -1,17 +1,16 @@
 import time
-from typing import List, Dict, Any
+from typing import List
 
 import torch
 import torch.distributed as dist
 from torch import Tensor
 
-from .cli import InstructDetails
 
 class Calculate:
     @staticmethod
     def update_conf_mat(conf_mat: Tensor, output: Tensor, label: Tensor):
         _, pred = output.max(1)  # Get Pred Tag
-        for index in range(conf_mat.shape[0]):
+        for index in range(label.shape[0]):
             conf_mat[label[index], pred[index]] += 1
 
     @staticmethod
@@ -36,7 +35,7 @@ class Calculate:
         for i in range(conf_mat.shape[0]):
             TP = conf_mat[i, i]
             TP_FP = conf_mat[:, i].sum()
-            res[i] = TP / TP_FP
+            res[i] = TP / (TP_FP + 1e-8)
         return res
 
     @staticmethod
@@ -45,7 +44,7 @@ class Calculate:
         for i in range(conf_mat.shape[0]):
             TP = conf_mat[i, i]
             TP_FN = conf_mat[i, :].sum()
-            res[i] = TP / TP_FN
+            res[i] = TP / (TP_FN + 1e-8)
         return res
 
 class Recorder:
@@ -81,6 +80,7 @@ class Recorder:
         self.mean_loss = sum(self.loss) / len(self.loss)
         self.mean_topk = sum(self.topk) / len(self.topk)
         if not dist.is_initialized():
+            self.is_converged = True
             return
         mean_loss = Tensor([self.mean_loss], device=self.device)
         mean_topk = Tensor([self.mean_topk], device=self.device)
@@ -108,7 +108,7 @@ class Recorder:
     def converge_loss(losses: List):
         mean_loss = sum(losses) / len(losses)
         if not dist.is_initialized():
-            return
+            return mean_loss
         mean_loss = Tensor([mean_loss], device=torch.cuda.current_device())
         dist.barrier()
         dist.all_reduce(mean_loss, op=dist.ReduceOp.SUM)
@@ -149,9 +149,9 @@ class MetricsManager:
         def record_val(self, recorder: Recorder):
             self.val_loss = recorder.get_mean_loss()
             self.top5_acc = recorder.get_mean_topk_acc()
-            self.top1_acc = Calculate.top1_accuracy(recorder.get_conf_mat())
-            self.precision = Calculate.precision(recorder.get_conf_mat())
-            self.recall = Calculate.recall(recorder.get_conf_mat())
+            self.top1_acc = Calculate.top1_accuracy(recorder.get_conf_mat()).mean().item()
+            self.precision = Calculate.precision(recorder.get_conf_mat()).mean().item()
+            self.recall = Calculate.recall(recorder.get_conf_mat()).mean().item()
             
             
     class DetectMetrics(Metrics):
@@ -168,16 +168,15 @@ class MetricsManager:
             self.mAP50 = kwargs.get("mAP50")
             self.mAP50_95 = kwargs.get("mAP50_95")
 
-    def __init__(self, id: InstructDetails, model_desc: dict):
+    def __init__(self):
         self.start_time = None
-        self.id = id
-        self.model_desc = model_desc
-        self.indexes: List[MetricsManager.Metrics] = []
+        self.metrics_collect: List[MetricsManager.Metrics] = []
         
-    def __call__(self, index: Metrics):
-        index.time = self.get_time()  # record submission time (comparing with start)
-        assert index.filled(), f"logger received an unfilled index"
-        self.indexes.append(index)
+    def __call__(self, metrics: Metrics) -> Metrics:
+        metrics.time = self.get_time()  # record submission time (comparing with start)
+        assert metrics.filled(), f"logger received an unfilled index"
+        self.metrics_collect.append(metrics)
+        return metrics
 
     def start(self):
         self.start_time = time.time()
@@ -186,9 +185,10 @@ class MetricsManager:
         assert self.start_time is not None, f"expect a start time for comparison"
         return time.time() - self.start_time
     
-    def get_metrics_holder(self, epoch: int = -1) -> Metrics:
-        if self.id.task == 'classify':
+    @classmethod
+    def get_metrics_holder(cls, task: str, epoch: int = -1) -> Metrics:
+        if task == 'classify':
             return MetricsManager.ClassifyMetrics(epoch=epoch)
-        if self.id.task == 'detect':
+        if task == 'detect':
             return MetricsManager.DetectMetrics(epoch=epoch)
         

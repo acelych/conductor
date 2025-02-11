@@ -15,9 +15,9 @@ class ModuleProvider():
     _modules: dict = {m.__name__: m for m in _modules}
     
     @classmethod
-    def __call__(cls, module_name: str) -> BaseModule:
+    def get_module(cls, module_name: str) -> BaseModule:
         assert module_name in cls._modules, f"unexpected module '{module_name}'"
-        return cls._modules.get[module_name]
+        return cls._modules.get(module_name)
     
     @classmethod
     def get_modules(cls) -> dict:

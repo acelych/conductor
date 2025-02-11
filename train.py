@@ -2,109 +2,148 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 from torch import nn, optim, Tensor
+from torch.types import Number
 from torch.utils.data import DataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from .utils.misc import LR_Scheduler
-from .utils.cli import InstructDetails
-
 from .model import ModelManager
 from .data import DataLoaderManager
-from .utils import MetricsManager, Recorder, Logger
+from .utils import ConfigManager, ArtifactManager, MetricsManager, Recorder, LogInterface, LR_Scheduler
 
 class Trainer:
     def __init__(self, 
                  rank: int, 
-                 id: InstructDetails, 
+                 cm: ConfigManager, 
+                 am: ArtifactManager, 
+                 log: LogInterface, 
                  model_mng: ModelManager, 
                  data_mng: DataLoaderManager, 
-                 met_mng: MetricsManager, 
-                 logger: Logger,
-                 ckpt: dict = None):
-        torch.cuda.set_device(id.world[rank])
-        dist.init_process_group(
-            "nccl" if dist.is_nccl_available() else "gloo", 
-            rank=rank, 
-            world_size=len(id.world)
-        )
+                 met_mng: MetricsManager, ):
+        
+        self.active_rank = {-1, }
+        self.device = torch.device(cm.device)
+
+        if cm.is_using_ddp():
+            torch.cuda.set_device(cm.world[rank])
+            dist.init_process_group(
+                "nccl" if dist.is_nccl_available() else "gloo", 
+                rank=rank, 
+                world_size=len(cm.world)
+            )
+            self.active_rank.add(cm.world[0])
+            self.device = torch.cuda.device(rank)
+
         self.rank = rank
-        self.id = id
+        self.cm = cm
+        self.am = am
+        self.log = log
         self.model_mng = model_mng
         self.data_mng = data_mng
         self.met_mng = met_mng
-        self.logger = logger
-        self.ckpt = ckpt
+
         
     def train(self):
         train_dataloader = self.data_mng.get_dataloader("train", rank=self.rank)
         val_dataloader = self.data_mng.get_dataloader("val", rank=self.rank)
         
         model = self.model_mng.build_model()
-        self.model = DDP(model, device_ids=[torch.cuda.current_device()])
-        self.criterion: nn.Module = self.id.criterion()
-        self.optimizer: optim.Optimizer = self.id.build_optimizer(self.model.parameters())
-        self.scheduler: LR_Scheduler = self.id.build_scheduler(self.optimizer, len(train_dataloader))
+        if self.cm.is_using_ddp():
+            self.model = DDP(model, device_ids=[torch.cuda.current_device()])
+        else:
+            self.model = model.to(self.cm.device)
+
+        self.criterion: nn.Module = self.cm.criterion()
+        self.optimizer: optim.Optimizer = self.cm.build_optimizer(self.model)
+        self.scheduler: LR_Scheduler = self.cm.build_scheduler(self.optimizer, len(train_dataloader))
 
         self.recorder: Recorder = Recorder(self.model_mng.model_desc.get("nc"))
         self.best_fitness = None
         self.met_mng.start()
         
-        for self.epoch in range(self.load_state(), self.id.epochs):
-            metrics = self.met_mng.get_metrics_holder(self.epoch)
+        if self.is_active():
+            self.log.info("initializing training")
+            self.log.info(self.model.info(), fn=True)
+
+        for self.epoch in range(self.load_state(), self.cm.epochs):
+            metrics = self.met_mng.get_metrics_holder(self.cm.task, self.epoch)
             
             # learn & val
-            self.train_epoch(self.model, train_dataloader, metrics)
-            val_loss: Tensor = self.val_epoch(self.model, val_dataloader, metrics)
+            self.train_epoch(train_dataloader, metrics)
+            val_loss: Number = self.val_epoch(val_dataloader, metrics)
             
+            if not self.is_active():  # following codes should be ran only once a cycle
+                continue
+
             # scheduler & fitness
             self.step_scheduler(val_loss)
-            self.best_fitness(val_loss)
+            self.step_fitness(val_loss)
             
             # metrics & save
-            self.met_mng(metrics)
-            self.save_state(val_loss.item())
+            metrics = self.met_mng(metrics)  # add time stick & save to met_mng
+            self.log.metrics(vars(metrics))  # write to metrics.csv
+            self.save_state(val_loss)  # save last & probably best
     
     def train_epoch(self, dataloader: DataLoader, metrics: MetricsManager.Metrics):
         self.model.train()
         losses = []
+
+        # let one of the devices handle process bar
+        if self.is_active():
+            self.log.bar_init(len(dataloader), self.get_bar_desc('train'))
+
         for x, label in dataloader:
+            x, label = self.move_batch(x, label)
             output = self.model(x)
             self.optimizer.zero_grad()
             loss: Tensor = self.criterion(output, label)
             loss.backward()
             self.optimizer.step()
             losses.append(loss.item())
+            if self.is_active():
+                self.log.bar_update()
+        if self.is_active():
+            self.log.bar_close()
         mean_loss = Recorder.converge_loss(losses)
         
-        # let one of the gpu fill the blanks
-        if dist.get_rank() == 0:
+        # let one of the devices fill the blanks
+        if self.is_active():
             metrics.record_train(mean_loss)
 
-    def val_epoch(self, dataloader: DataLoader, metrics: MetricsManager.Metrics):
+    def val_epoch(self, dataloader: DataLoader, metrics: MetricsManager.Metrics) -> Number:
         self.model.eval()
         self.recorder.clear()
+
+        # let one of the devices handle process bar
+        if self.is_active():
+            self.log.bar_init(len(dataloader), self.get_bar_desc('val'))
+
         for x, label in dataloader:
+            x, label = self.move_batch(x, label)
             output = self.model(x)
-            loss = self.criterion(output, label)
+            loss: Tensor = self.criterion(output, label)
             self.recorder(output, label, loss)
+            if self.is_active():
+                self.log.bar_update()
+        if self.is_active():
+            self.log.bar_close()
         self.recorder.converge()
         
-        # let one of the gpu fill the blanks
-        if dist.get_rank() == 0:
+        # let one of the devices fill the blanks
+        if self.is_active():
             metrics.record_val(self.recorder)
             
         return self.recorder.get_mean_loss()
     
-    def step_scheduler(self, val_loss: Tensor):
+    def step_scheduler(self, val_loss: Number):
         if isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
             self.scheduler.step(metrics=val_loss)
         else:
             self.scheduler.step()
 
-    def step_fitness(self, val_loss: Tensor):
+    def step_fitness(self, val_loss: Number):
         if self.best_fitness is None:
-            self.best_fitness = val_loss.item()
-        self.best_fitness = min(self.best_fitness, val_loss.item())
+            self.best_fitness = val_loss
+        self.best_fitness = min(self.best_fitness, val_loss)
 
     def save_state(self, curr_fitness):
         import io
@@ -121,31 +160,49 @@ class Trainer:
         )
         serialized_ckpt = buffer.getvalue()
 
-        self.logger.last.write_bytes(serialized_ckpt)
+        self.am.last.write_bytes(serialized_ckpt)
         if curr_fitness == self.best_fitness:
-            self.logger.best.write_bytes(serialized_ckpt)
+            self.am.best.write_bytes(serialized_ckpt)
 
     def load_state(self) -> int:
-        if self.ckpt:
-            self.model.load_state_dict(self.ckpt.get('model_state_dict'))
-            self.optimizer.load_state_dict(self.ckpt.get('opt_state_dict'))
-            self.scheduler.load_state_dict(self.ckpt.get('lrs_state_dict'))
-            return self.ckpt.get('epoch') + 1
+        if self.am.ckpt:
+            self.model.load_state_dict(self.am.ckpt.get('model_state_dict'))
+            self.optimizer.load_state_dict(self.am.ckpt.get('opt_state_dict'))
+            self.scheduler.load_state_dict(self.am.ckpt.get('lrs_state_dict'))
+            return self.am.ckpt.get('epoch') + 1
         else:
             return 0
+        
+    def move_batch(self, *args: Tensor) -> tuple:
+        return (arg.to(self.device) for arg in args)
+    
+    def get_bar_desc(self, stage: str, etc = None) -> str:
+        result = f"({stage}) {self.epoch}/{self.cm.epochs}"
+        if etc:
+            result = f"{result} {etc}"
+        return result
+    
+    def is_active(self) -> bool:
+        return self.rank in self.active_rank
             
     @staticmethod
-    def init_trainer(rank, id: InstructDetails, model_mng: ModelManager, data_mng: DataLoaderManager, idx_mng: MetricsManager):
-        trainer = Trainer(rank, id, model_mng, data_mng, idx_mng)
+    def init_trainer(rank, cm: ConfigManager, am: ArtifactManager, log: LogInterface, model_mng: ModelManager, data_mng: DataLoaderManager, met_mng: MetricsManager):
+        trainer = Trainer(rank, cm, am, log, model_mng, data_mng, met_mng)
         trainer.train()
 
     
 class TrainerManager:
-    def __init__(self, id: InstructDetails):
-        self.model_mng = ModelManager(id.model_yaml_path, id.task)
-        self.data_mng = DataLoaderManager(id.data_yaml_path, id)
-        self.met_mng = MetricsManager(id, self.model_mng.model_desc)
-        self.id = id
+    def __init__(self, cm: ConfigManager, am: ArtifactManager, log: LogInterface):
+        self.cm = cm
+        self.am = am
+        self.log = log
+        self.model_mng = ModelManager(self.cm)
+        self.data_mng = DataLoaderManager(self.cm)
+        self.met_mng = MetricsManager()
         
     def train(self):
-        mp.spawn(Trainer.init_trainer, args=(self.id, self.model_mng, self.data_mng, self.met_mng), nprocs=len(self.id.world), join=True)
+        if self.cm.is_using_ddp():
+            self.log.info(f"initializing distributed data parallel training, using gpu {self.cm.world}")
+            mp.spawn(Trainer.init_trainer, args=(self.cm, self.am, self.log, self.model_mng, self.data_mng, self.met_mng), nprocs=len(self.cm.world), join=True)
+        else:
+            Trainer.init_trainer(-1, self.cm, self.am, self.log, self.model_mng, self.data_mng, self.met_mng)

@@ -3,8 +3,8 @@
 # basics
 model_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/utils/resources/example/mobilenetv3.yaml
 data_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/temp/cifar100.yaml
-command: train
-task: classify
+command: train  # command from cli, indicate the Conductor what to do
+task: classify  # task of the model
 
 # training details
 epochs: 300
@@ -20,5 +20,4 @@ decay: 1e-5
 
 # logging & ckpt details
 output_dir: C:/Workspace/DataScience/ComputerVision/conductor/temp/
-taskdir_name: exp
 ckpt: null

@@ -1,13 +1,13 @@
 import os
 import yaml
-from typing import List, Set, Iterable
+from typing import List, Set
 
 import torch
 from torch import nn, optim, Tensor
 
 from .modules._utils import BaseModule
 from .modules.module import ModuleProvider
-from .utils import ResourceManager
+from .utils import ResourceManager, ConfigManager
 
 
 class Model(nn.Module):
@@ -21,15 +21,22 @@ class Model(nn.Module):
         saved = dict()
         for layer in self.layers:
             # forward
-            if x.f != -1:
-                x = layer(*(saved.get(i) for i in ([x.f] if isinstance(x.f, int) else x.f)))
+            if layer.f != -1:
+                x = layer(*(saved.get(i) for i in ([layer.f] if isinstance(layer.f, int) else layer.f)))
             else:
                 x = layer(x)
                 
             # save layer's output
-            if x.i in self.save:
-                saved[x.i] = x
+            if layer.i in self.save:
+                saved[layer.i] = x
         return x
+    
+    def info(self) -> List[str]:
+        info_list = []
+        info_list.append(f"{'':>3}{'from':>20}{'n':>3}{'params':>10}  {'module':<45}{'arguments':<30}")
+        for layer in self.layers:
+            info_list.append(f"{layer.i:>3}{str(layer.f):>20}{layer.n:>3}{layer.p:10.0f}  {layer.t:<45}{str(layer.args):<30}")
+        return info_list
     
     def _init_weights(self, m):
         if isinstance(m, (nn.Linear, nn.Conv2d)):
@@ -42,9 +49,9 @@ class Model(nn.Module):
         
 
 class ModelManager():
-    def __init__(self, yaml_path: str, task: str):
-        self.task = task
-        self.parse_yaml(yaml_path)
+    def __init__(self, cm: ConfigManager):
+        self.task = cm.task
+        self.parse_yaml(cm.model_yaml_path)
     
     def parse_yaml(self, yaml_path: str):
         with open(yaml_path, 'r') as f:
@@ -76,7 +83,7 @@ class ModelManager():
             assert all(i >= x for x in ([f] if isinstance(f, int) else f)), f"expect former layers of layer {i}, got {f}"
             assert n >= 1, f"expect n of layer {i} >= 1, got {n}"
             
-            m: BaseModule = ModuleProvider(m)
+            m: BaseModule = ModuleProvider.get_module(m)
             c1, c2, args, kwargs = m.yaml_args_parser(channels, f, ModuleProvider.get_modules(), args)
             
             if i == 0:
@@ -86,7 +93,7 @@ class ModelManager():
                 
             save.union(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)
             _m = nn.Sequential(*(m(*args, **kwargs) for _ in range(n))) if n > 1 else m(*args, **kwargs)
-            _m.p, _m.i, _m.f, _m.t, _m.args = sum(x.numel() for x in _m.parameters()), i, f, m.__module__ + '.' + m.__name__, args
+            _m.i, _m.f, _m.n, _m.p, _m.t, _m.args = i, f, n, sum(x.numel() for x in _m.parameters()), m.__module__ + '.' + m.__name__, args
             layers.append(_m)
             
         return Model(nn.Sequential(*layers), sorted(list(save)))

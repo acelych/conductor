@@ -1,4 +1,4 @@
-nc: 80
+nc: &nc 100
 task: classify
 backbone:
   - [-1, 1, ConvNormAct, [[16, 3, 2], BatchNorm2d, Hardswish]]  # [[c2, k, ...], BatchNorm2d, Hardswish]
@@ -19,4 +19,4 @@ backbone:
   - [-1, 1, InvertedResidual, [160, 960, 5, 1, 1, true, Hardswish]]
   - [-1, 1, ConvNormAct, [[960, 1, 1], BatchNorm2d, Hardswish]]
 head:
-  - [-1, 1, Classifier, [nc, 1280]]
+  - [-1, 1, Classifier, [*nc, 1280]]

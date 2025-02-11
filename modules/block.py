@@ -51,9 +51,9 @@ class InvertedResidual(BaseModule):
     def yaml_args_parser(channels, former, modules, args) -> Tuple[int, int, list, dict]:
         '''
         yaml format:
-        [former, repeats, InvertedResidual, [c2, ce, k, s, d, false, ReLU]
+        [former, repeats, InvertedResidual, [c2, ce, k, s, d, false, ReLU]]
         '''
         c1 = channels[former]
         c2 = args[0]
         args[-1] = _convert_str2class(args[-1], modules)  # get act
-        return c1, c2, [c1] + args, None
+        return c1, c2, [c1] + args, dict()

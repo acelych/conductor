@@ -30,4 +30,4 @@ class Classifier(BaseModule):
         '''
         c1 = channels[former]
         c2 = args[0]
-        return c1, c2, [c1] + args, None
+        return c1, c2, [c1] + args, dict()

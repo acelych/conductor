@@ -1,68 +1,18 @@
 import yaml
 import shutil
-import datetime
 from pathlib import Path
-from typing import Union
+from typing import Any, Dict, Tuple
 
 import pandas as pd
-from torch import cuda, nn, optim
-from tqdm import tqdm
+
+import torch
+from torch import nn, optim, cuda
 
 from .resources import ResourceManager
+from .stat import MetricsManager
 from .misc import LR_Scheduler, get_module_class_str
 
-## ========== CONSOLE OUTPUTS FORMAT ========== ##
-
-class Logger:
-    def __init__(self, output_dir: Union[str, Path], taskdir_name: str = None):
-        output_dir = Path(output_dir) if isinstance(output_dir, str) else output_dir
-        assert output_dir.exists(), f"output directory '{output_dir.__str__}' is not exist"
-
-        if taskdir_name is None:
-            taskdir_name = get_default_taskdir_name(output_dir)
-
-        self.taskdir = output_dir / taskdir_name
-        if self.taskdir.exists():
-            shutil.rmtree(self.taskdir)
-        self.taskdir.mkdir()
-
-        self.console_logger_path = self.taskdir / 'console.log'
-        self.metrics_logger_path = self.taskdir / 'metrics.csv'
-        self.weights_dir = self.taskdir / 'weights'
-        self.weights_dir.mkdir()
-        self.best = self.weights_dir / 'best.pt'
-        self.last = self.weights_dir / 'last.pt'
-        self.save_fitness = None
-
-        self.info(f"Conductor --- {datetime.datetime.now()}\n")  # init console logger
-
-    def init_metrics(self, metrics_heads: tuple):
-        pd.DataFrame({k: [] for k in metrics_heads}).to_csv(self.metrics_logger_path, index=False)  # init indexes logger
-
-    def info(self, content: str):
-        if isinstance(content, str):
-            print(content)
-            with open(self.console_logger_path, 'a') as f:
-                f.write(content + '\n')
-                
-        elif isinstance(content, list):                
-            (self.info(row) for row in content)
-
-    def metrics(self, content: dict):
-        pd.DataFrame(content).to_csv(self.metrics_logger_path, mode='a', header=False, index=False)
-
-
-def get_default_taskdir_name(output_dir: Path):
-    default_name = "task"
-    default_idx = 0
-    dirs = [f.name for f in output_dir.iterdir() if f.is_dir()]
-    while f'{default_name}_{default_idx}' in dirs:
-        default_idx += 1
-    return f'{default_name}_{default_idx}'
-
-## ========== CONSOLE INPUTS FORMAT ========== ##
-
-class InstructDetails:
+class ConfigManager:
     def __init__(
         self,
         model_yaml_path: str,
@@ -79,7 +29,7 @@ class InstructDetails:
         decay: float = 1e-5,
         batch_size: int = None,
         epochs: int = 300,
-        **kwargs,  # accept unexpected args
+        **kwargs: Dict[str, Any],  # accept unexpected args
         ):
         self.model_yaml_path: str = model_yaml_path
         self.data_yaml_path: str = data_yaml_path
@@ -95,14 +45,15 @@ class InstructDetails:
         self.decay = float(decay)
         self.batch_size = batch_size if batch_size else (len(world) * 16 if world else 16)
         self.epochs = int(epochs)
+        self.__dict__.update(kwargs)
 
-    def logging(self, logger: Logger):
-        info = "### Task Arguments ###\n"
+    def info(self) -> list:
+        info_list = ["###  CONFIG  ###"]
         for k, v in vars(self).items():
             if v.__class__ not in [str, list, float, int]:
                 v = get_module_class_str(v)
-            info += f"{k}: {v}\n"
-        logger.info(info)
+            info_list.append(f"{k}: {v}")
+        return info_list
         
     def build_optimizer(self, model: nn.Module):
         if self.optimizer in [optim.Adam, optim.AdamW, optim.Adamax, optim.NAdam, optim.RAdam]:
@@ -145,8 +96,11 @@ class InstructDetails:
         return sch_instance
     
     @classmethod
-    def get_instance(cls, logger: Logger, model_yaml_path: str, data_yaml_path: str, command: str, **kwargs):
+    def get_instance(cls, **kwargs) -> Tuple[Any, list]:
         import ast
+
+        model_yaml_path = kwargs.get('model_yaml_path')
+        info = []
         
         # task
         task = kwargs.get('task')
@@ -164,7 +118,7 @@ class InstructDetails:
         if device:  # defined by user
             assert device in ['cuda', 'cpu'], f"expect 'device' to be 'cuda' or 'cpu', got {device}"
             if device == 'cuda' and device_count == 0:
-                logger.info("changing device to 'cpu' since cuda is not available")
+                info.append("changing device to 'cpu' since cuda is not available")
                 device = 'cpu'
         else:
             device = 'cuda' if device_count > 0 else 'cpu'
@@ -174,7 +128,7 @@ class InstructDetails:
         world: str = kwargs.get('world')
         if world:
             if device != 'cuda':
-                logger.info("changing world to None since cuda is not available")
+                info.append("changing world to None since cuda is not available")
                 world = None
             else:
                 try:
@@ -182,6 +136,7 @@ class InstructDetails:
                 except Exception as e:
                     raise AssertionError(f"expect world to be a parseable string, got '{world}'") from e
                 assert len(world) <= device_count, f"expect using {device_count} gpu device(s) at most, got {world}"
+                assert max(world) < device_count, f"expect device sequence less than {device_count}, got {max(world)}"
         else:
             world = [0] if device == 'cuda' else None
         kwargs['world'] = world
@@ -212,8 +167,52 @@ class InstructDetails:
         if batch_size:
             assert kwargs.get('batch_size') % len(world) == 0, f"expect batch size a multiple of amount of devices."
         
-        return cls(model_yaml_path, data_yaml_path, command, **kwargs)
-            
+        return cls(**kwargs), info
+    
+    def is_using_ddp(self):
+        return self.world is not None and len(self.world) > 1
+    
 
-def is_using_ddp(id: InstructDetails):
-    return id.world is not None and len(id.world) > 1
+class ArtifactManager:
+    def __init__(self, cm: ConfigManager):
+        self.cm = cm
+        output_dir = getattr(cm, 'output_dir')
+        output_dir: Path = Path(output_dir) if output_dir else Path('.')
+        assert output_dir.exists(), f"output directory '{output_dir.__str__}' is not exist"
+
+        self.taskdir = output_dir / get_default_taskdir_name(output_dir)
+        if self.taskdir.exists():
+            shutil.rmtree(self.taskdir)
+        self.taskdir.mkdir()
+
+        # Path
+        self.console_logger_path = self.taskdir / 'console.log'
+        self.metrics_logger_path = self.taskdir / 'metrics.csv'
+        self.weights_dir = self.taskdir / 'weights'
+        self.weights_dir.mkdir()
+        self.best = self.weights_dir / 'best.pt'
+        self.last = self.weights_dir / 'last.pt'
+
+        # File
+        ckpt = getattr(cm, 'ckpt')
+        self.ckpt: dict = torch.load(ckpt) if ckpt else None  # load ckpt if available
+        
+        metrics_heads = MetricsManager.get_metrics_holder(cm.task).get_heads()
+        pd.DataFrame({k: [] for k in metrics_heads}).to_csv(self.metrics_logger_path, index=False)  # init indexes logger
+
+    def info(self, content: str):
+        with open(self.console_logger_path, 'a') as f:
+            f.write(content + '\n')
+            
+    def metrics(self, content: dict):
+        content = {k: [v] for k, v in content.items()}
+        pd.DataFrame(content).to_csv(self.metrics_logger_path, mode='a', header=False, index=False)
+
+
+def get_default_taskdir_name(output_dir: Path):
+    default_name = "task"
+    default_idx = 0
+    dirs = [f.name for f in output_dir.iterdir() if f.is_dir()]
+    while f'{default_name}_{default_idx}' in dirs:
+        default_idx += 1
+    return f'{default_name}_{default_idx}'
