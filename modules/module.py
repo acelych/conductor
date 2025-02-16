@@ -10,6 +10,7 @@ class ModuleProvider():
     _modules = [
         ConvNormAct,
         InvertedResidual,
+        HadamardResidual,
         Classifier
     ]
     _modules: dict = {m.__name__: m for m in _modules}

@@ -1,7 +1,7 @@
 import yaml
 import shutil
 from pathlib import Path
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Tuple, Union, Sequence
 
 import pandas as pd
 
@@ -23,16 +23,18 @@ class ConfigManager:
         world: list = None,  # giving [...] of devices of using cuda
         criterion: nn.Module = nn.CrossEntropyLoss,
         optimizer: optim.Optimizer = optim.AdamW,
-        scheduler: LR_Scheduler = optim.lr_scheduler.ReduceLROnPlateau,
+        scheduler: LR_Scheduler = None,
         learn_rate: float = 0.001,
+        warmup_rate = 0.05,
         momentum: float = 0.9,
         decay: float = 1e-5,
         batch_size: int = None,
         epochs: int = 300,
+        imgsz: Union[int, tuple] = (224, 224),
         **kwargs: Dict[str, Any],  # accept unexpected args
         ):
-        self.model_yaml_path: str = model_yaml_path
-        self.data_yaml_path: str = data_yaml_path
+        self.model_yaml_path: Path = Path(model_yaml_path)
+        self.data_yaml_path: Path = Path(data_yaml_path)
         self.command: str = command
         self.task: str = task
         self.device: str = device
@@ -41,16 +43,18 @@ class ConfigManager:
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.learn_rate = float(learn_rate)
+        self.warmup_rate = float(warmup_rate)
         self.momentum = float(momentum)
         self.decay = float(decay)
         self.batch_size = batch_size if batch_size else (len(world) * 16 if world else 16)
         self.epochs = int(epochs)
+        self.imgsz = imgsz
         self.__dict__.update(kwargs)
 
     def info(self) -> list:
         info_list = ["###  CONFIG  ###"]
         for k, v in vars(self).items():
-            if v.__class__ not in [str, list, float, int]:
+            if v.__class__ not in [str, list, float, int] and not isinstance(v, Path):
                 v = get_module_class_str(v)
             info_list.append(f"{k}: {v}")
         return info_list
@@ -90,10 +94,20 @@ class ConfigManager:
             sch_instance = self.scheduler(optimizer=opt, T_max=self.epochs, eta_min=1e-6, **kwargs)
         elif self.scheduler is optim.lr_scheduler.OneCycleLR:
             sch_instance = self.scheduler(optimizer=opt, max_lr=0.01, steps_per_epoch=steps_per_epoch, total_steps=self.epochs, **kwargs)
+        elif self.scheduler is None:
+            sch_instance = optim.lr_scheduler.LambdaLR(optimizer=opt, lr_lambda=lambda epoch:1)  # empty scheduler
         else:
             raise AssertionError(f"unexpected scheduler '{self.scheduler.__name__}'")
+        
+        warmup_epo = self.get_warmup_epochs()
+        warmup_sch = optim.lr_scheduler.LambdaLR(optimizer=opt, lr_lambda=lambda epoch: (epoch + 1) / warmup_epo if epoch < warmup_epo else 1)
+        combined_sch = optim.lr_scheduler.SequentialLR(
+            optimizer=opt,
+            schedulers=[warmup_sch, sch_instance],
+            milestones=[warmup_epo]
+        )
 
-        return sch_instance
+        return combined_sch
     
     @classmethod
     def get_instance(cls, **kwargs) -> Tuple[Any, list]:
@@ -160,17 +174,27 @@ class ConfigManager:
         if scheduler:
             scheduler_cls = getattr(optim.lr_scheduler, scheduler.lstrip('optim.').lstrip('lr_scheduler.'), None)
             assert scheduler_cls, f"unexpected scheduler '{scheduler}'"
-        kwargs['scheduler'] = scheduler_cls
+            kwargs['scheduler'] = scheduler_cls
 
         # batch_size
         batch_size = kwargs.get('batch_size')
         if batch_size:
-            assert kwargs.get('batch_size') % len(world) == 0, f"expect batch size a multiple of amount of devices."
+            assert batch_size % len(world) == 0, f"expect batch size a multiple of amount of devices."
+
+        # imgsz
+        imgsz = kwargs.get('imgsz')
+        if imgsz:
+            if isinstance(imgsz, Sequence):
+                assert len(imgsz) == 2 and all((isinstance(it, int) for it in imgsz)), f"expect imgsz to be a 2 integers' sequence"
+            kwargs['imgsz'] = tuple(imgsz)
         
         return cls(**kwargs), info
     
-    def is_using_ddp(self):
+    def isddp(self) -> bool:
         return self.world is not None and len(self.world) > 1
+    
+    def get_warmup_epochs(self) -> int:
+        return int(self.epochs * self.warmup_rate)
     
 
 class ArtifactManager:

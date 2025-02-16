@@ -8,7 +8,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from .model import ModelManager
 from .data import DataLoaderManager
-from .utils import ConfigManager, ArtifactManager, MetricsManager, Recorder, LogInterface, LR_Scheduler
+from .utils import ConfigManager, ArtifactManager, MetricsManager, Recorder, LogInterface, LR_Scheduler, get_model_assessment
 
 class Trainer:
     def __init__(self, 
@@ -23,7 +23,7 @@ class Trainer:
         self.active_rank = {-1, }
         self.device = torch.device(cm.device)
 
-        if cm.is_using_ddp():
+        if cm.isddp():
             torch.cuda.set_device(cm.world[rank])
             dist.init_process_group(
                 "nccl" if dist.is_nccl_available() else "gloo", 
@@ -43,11 +43,14 @@ class Trainer:
 
         
     def train(self):
+        if self.isactive():
+            self.log.info("initializing training")
+
         train_dataloader = self.data_mng.get_dataloader("train", rank=self.rank)
         val_dataloader = self.data_mng.get_dataloader("val", rank=self.rank)
         
         model = self.model_mng.build_model()
-        if self.cm.is_using_ddp():
+        if self.cm.isddp():
             self.model = DDP(model, device_ids=[torch.cuda.current_device()])
         else:
             self.model = model.to(self.cm.device)
@@ -58,11 +61,13 @@ class Trainer:
 
         self.recorder: Recorder = Recorder(self.model_mng.model_desc.get("nc"))
         self.best_fitness = None
-        self.met_mng.start()
         
-        if self.is_active():
-            self.log.info("initializing training")
+        if self.isactive():
             self.log.info(self.model.info(), fn=True)
+            model_assessment, _ = get_model_assessment(self.model, self.cm.imgsz)
+            self.log.info(model_assessment, fn=True)
+
+        self.met_mng.start()
 
         for self.epoch in range(self.load_state(), self.cm.epochs):
             metrics = self.met_mng.get_metrics_holder(self.cm.task, self.epoch)
@@ -71,25 +76,28 @@ class Trainer:
             self.train_epoch(train_dataloader, metrics)
             val_loss: Number = self.val_epoch(val_dataloader, metrics)
             
-            if not self.is_active():  # following codes should be ran only once a cycle
+            if not self.isactive():  # following codes should be ran only once a cycle
                 continue
 
             # scheduler & fitness
-            self.step_scheduler(val_loss)
+            self.step_scheduler(val_loss, metrics)
             self.step_fitness(val_loss)
             
             # metrics & save
             metrics = self.met_mng(metrics)  # add time stick & save to met_mng
             self.log.metrics(vars(metrics))  # write to metrics.csv
             self.save_state(val_loss)  # save last & probably best
+
+        if self.isactive():
+            self.data_mng.save_caches()
     
     def train_epoch(self, dataloader: DataLoader, metrics: MetricsManager.Metrics):
         self.model.train()
         losses = []
 
         # let one of the devices handle process bar
-        if self.is_active():
-            self.log.bar_init(len(dataloader), self.get_bar_desc('train'))
+        if self.isactive():
+            self.log.bar_init(len(dataloader), self.get_bar_desc('train'), fn=True)
 
         for x, label in dataloader:
             x, label = self.move_batch(x, label)
@@ -99,14 +107,14 @@ class Trainer:
             loss.backward()
             self.optimizer.step()
             losses.append(loss.item())
-            if self.is_active():
+            if self.isactive():
                 self.log.bar_update()
-        if self.is_active():
+        if self.isactive():
             self.log.bar_close()
         mean_loss = Recorder.converge_loss(losses)
         
         # let one of the devices fill the blanks
-        if self.is_active():
+        if self.isactive():
             metrics.record_train(mean_loss)
 
     def val_epoch(self, dataloader: DataLoader, metrics: MetricsManager.Metrics) -> Number:
@@ -114,7 +122,7 @@ class Trainer:
         self.recorder.clear()
 
         # let one of the devices handle process bar
-        if self.is_active():
+        if self.isactive():
             self.log.bar_init(len(dataloader), self.get_bar_desc('val'))
 
         for x, label in dataloader:
@@ -122,23 +130,27 @@ class Trainer:
             output = self.model(x)
             loss: Tensor = self.criterion(output, label)
             self.recorder(output, label, loss)
-            if self.is_active():
+            if self.isactive():
                 self.log.bar_update()
-        if self.is_active():
+        if self.isactive():
             self.log.bar_close()
         self.recorder.converge()
         
         # let one of the devices fill the blanks
-        if self.is_active():
+        if self.isactive():
             metrics.record_val(self.recorder)
             
         return self.recorder.get_mean_loss()
     
-    def step_scheduler(self, val_loss: Number):
-        if isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
+    def step_scheduler(self, val_loss: Number, met: MetricsManager.Metrics):
+        import warnings
+        warnings.filterwarnings('ignore', category=UserWarning)
+
+        if self.cm.scheduler is optim.lr_scheduler.ReduceLROnPlateau and not (self.epoch < self.cm.get_warmup_epochs()):
             self.scheduler.step(metrics=val_loss)
         else:
             self.scheduler.step()
+        met.learn_rate = self.scheduler.get_last_lr()[0]
 
     def step_fitness(self, val_loss: Number):
         if self.best_fitness is None:
@@ -182,7 +194,7 @@ class Trainer:
             result = f"{result} {etc}"
         return result
     
-    def is_active(self) -> bool:
+    def isactive(self) -> bool:
         return self.rank in self.active_rank
             
     @staticmethod
@@ -197,11 +209,11 @@ class TrainerManager:
         self.am = am
         self.log = log
         self.model_mng = ModelManager(self.cm)
-        self.data_mng = DataLoaderManager(self.cm)
+        self.data_mng = DataLoaderManager(self.cm, self.log)
         self.met_mng = MetricsManager()
         
     def train(self):
-        if self.cm.is_using_ddp():
+        if self.cm.isddp():
             self.log.info(f"initializing distributed data parallel training, using gpu {self.cm.world}")
             mp.spawn(Trainer.init_trainer, args=(self.cm, self.am, self.log, self.model_mng, self.data_mng, self.met_mng), nprocs=len(self.cm.world), join=True)
         else:

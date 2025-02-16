@@ -43,8 +43,9 @@ class LogInterface:
         self.info([k_str, v_str])
         self.am.metrics(met)
 
-    def bar_init(self, total: int, desc: str):
-        self.info('')
+    def bar_init(self, total: int, desc: str, fn: bool = False):
+        if fn:
+            self.info('')
         self.tbar = tqdm(total=total, desc=desc, bar_format="{l_bar}{bar:40}{r_bar}")
 
     def bar_update(self, desc: str = None):

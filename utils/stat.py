@@ -1,6 +1,9 @@
 import time
 from typing import List
 
+import numpy as np
+import matplotlib.pyplot as plt
+
 import torch
 import torch.distributed as dist
 from torch import Tensor
@@ -46,6 +49,44 @@ class Calculate:
             TP_FN = conf_mat[i, :].sum()
             res[i] = TP / (TP_FN + 1e-8)
         return res
+    
+class Plot:
+    @staticmethod
+    def plot_line_chart(epochs: np.ndarray, train_loss: np.ndarray, val_loss: np.ndarray, precision: np.ndarray, recall: np.ndarray, top1: np.ndarray):
+        fig, axs = plt.subplots(2, 2, figsize=(10, 10))
+        plt.subplots_adjust(wspace=0.3, hspace=0.3)
+
+        axs[0, 0].plot(epochs, train_loss, color='blue', linewidth=1, label='Train Loss')
+        axs[0, 0].plot(epochs, val_loss, color='red', linewidth=1, label='Val Loss')
+        axs[0, 0].set_title('Train Loss vs Val Loss')
+        axs[0, 0].set_xlabel('Epochs')
+        axs[0, 0].set_ylabel('Loss')
+        axs[0, 0].legend()
+        axs[0, 0].grid(True)
+
+        axs[0, 1].plot(epochs, precision, color='green', linewidth=1, label='Precision')
+        axs[0, 1].set_title('Precision')
+        axs[0, 1].set_xlabel('Epochs')
+        axs[0, 1].set_ylabel('Precision')
+        axs[0, 1].legend()
+        axs[0, 1].grid(True)
+
+        axs[1, 0].plot(epochs, recall, color='purple', linewidth=1, label='Recall')
+        axs[1, 0].set_title('Recall')
+        axs[1, 0].set_xlabel('Epochs')
+        axs[1, 0].set_ylabel('Recall')
+        axs[1, 0].legend()
+        axs[1, 0].grid(True)
+
+        axs[1, 1].plot(epochs, top1, color='orange', linewidth=1, label='Top-1')
+        axs[1, 1].set_title('Top-1 Accuracy')
+        axs[1, 1].set_xlabel('Epochs')
+        axs[1, 1].set_ylabel('Top-1')
+        axs[1, 1].legend()
+        axs[1, 1].grid(True)
+        
+        plt.savefig('./temp.png')
+        plt.close()
 
 class Recorder:
     def __init__(self, num_classes: int, k: int = 5):
@@ -105,7 +146,7 @@ class Recorder:
         return self.conf_mat
     
     @staticmethod
-    def converge_loss(losses: List):
+    def converge_loss(losses: List) -> float:
         mean_loss = sum(losses) / len(losses)
         if not dist.is_initialized():
             return mean_loss
@@ -120,6 +161,7 @@ class MetricsManager:
         def __init__(self, *args, **kwargs):
             self.epoch = kwargs.get('epoch')
             self.time = kwargs.get('time')
+            self.learn_rate = kwargs.get('learn_rate')
             
         def filled(self) -> bool:
             return all(v is not None for v in vars(self).values())

@@ -1,22 +1,23 @@
 # example of instruction yaml
 
 # basics
-model_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/utils/resources/example/mobilenetv3.yaml
+model_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/utils/resources/example/hadamard_exp.yaml
+# model_yaml_path: mobilenet_v3_small,{'num_classes':100}
 data_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/temp/cifar100.yaml
 command: train  # command from cli, indicate the Conductor what to do
 task: classify  # task of the model
 
 # training details
-epochs: 300
-batch_size: 32
+epochs: 200
+batch_size: 64
 device: cuda
 world: '[0]'
 criterion: CrossEntropyLoss  # below: within default
 optimizer: AdamW
-scheduler: ReduceLROnPlateau
-learn_rate: 0.001
+scheduler: CosineAnnealingLR
+learn_rate: 1e-3
 momentum: 0.9
-decay: 1e-5
+decay: 1e-4
 
 # logging & ckpt details
 output_dir: C:/Workspace/DataScience/ComputerVision/conductor/temp/

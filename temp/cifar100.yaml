@@ -1,7 +1,13 @@
 task: classify
 path: ./cifar100
-train: train-00000-of-00001.parquet
-test: test-00000-of-00001.parquet
+train: 
+  path: train-00000-of-00001.parquet
+  mean: [0.50707516, 0.48654887, 0.44091784]
+  std: [0.21093635, 0.20827588, 0.21540853]
+test: 
+  path: test-00000-of-00001.parquet
+  mean: [0.50879641, 0.48739301, 0.44194221]
+  std: [0.21185054, 0.20961416, 0.21656635]
 
 names:
   0: apple
