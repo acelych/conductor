@@ -63,7 +63,7 @@ class InvertedResidual(BaseModule):
     
 
 class HadamardExpansion(nn.Module):
-    def __init__(self, c1, ce, norm = nn.BatchNorm2d):
+    def __init__(self, c1, ce):
         super().__init__()
 
         self.c1 = c1
@@ -71,31 +71,45 @@ class HadamardExpansion(nn.Module):
         self.candidates_num = c1 * (c1 - 1) // 2
         assert self.ce <= self.candidates_num, f"too much expansion channels required"
         
-        self.candidates_met = torch.zeros((2, self.candidates_num, c1))
+        self.selected_met: Tensor
+        self.selected_seq: Tensor
+        
+        can_idx_loc = torch.zeros((3, self.candidates_num * 2), dtype=torch.int64)
+        can_idx_val = torch.ones(self.candidates_num * 2)
+        can_idx = 0
         for i in range(c1):
             for j in range(i + 1, c1):
-                can_idx = i * c1 + (j - i - 1)
-                self.candidates_met[0, can_idx, i] = 1.0
-                self.candidates_met[1, can_idx, j] = 1.0
+                can_idx_loc[can_idx * 2] = (0, can_idx, i)
+                can_idx_loc[can_idx * 2 + 1] = (1, can_idx, j)
+                can_idx += 1
+        self.candidates_met = torch.sparse_coo_tensor(indices=can_idx_loc, values=can_idx_val)
 
         # gumbel-softmax
         self.logits = nn.Parameter(torch.randn(self.candidates_num))
         self.hard_mask = nn.Parameter(torch.zeros(self.candidates_num))
         self.tau = nn.Parameter(torch.tensor(2.0))
 
-        # batch normalize
-        self.norm = norm(c1 + ce) if norm else nn.Identity()
+        # instance normalize
+        self.norm = nn.InstanceNorm2d(c1 + ce, affine=True)
+        
+        # initialize
+        torch.nn.init.uniform_(self.logits, a=-0.1, b=0.1)
 
     def forward(self, x: Tensor) -> Tensor:
         if self.training:
             self._update_mask()
-
-        x_i = self.selected_met[0, ...] @ x
-        x_j = self.selected_met[1, ...] @ x
+            _shape = x.shape
+            x = x.flatten(1)
+            x_i = (self.selected_met[0, ...] @ x).view(_shape)
+            x_j = (self.selected_met[1, ...] @ x).view(_shape)
+        else:
+            x_i = x[:, self.selected_seq[0], ...]
+            x_j = x[:, self.selected_seq[1], ...]
         x_expand = x_i * x_j
         return self.norm(torch.cat([x, x_expand], dim=1))
         
     def _update_mask(self):
+        torch.clamp(self.tau, max=4.0, min=0.1, out=self.tau)
         mask = nn.functional.gumbel_softmax(self.logits, tau=self.tau)
         _, topk_idx = torch.topk(mask, self.ce)
 
@@ -109,7 +123,7 @@ class HadamardExpansion(nn.Module):
         self.selected_met = self.hard_mask.unsqueeze(1) * self.candidates_met
         non_zero = torch.sum(self.selected_met, dim=1) != 0
         self.selected_met = self.selected_met[non_zero]
-
+        self.selected_seq = torch.argmax(self.selected_met, dim=1)
     
 
 class HadamardCompression(nn.Module):
@@ -119,7 +133,7 @@ class HadamardCompression(nn.Module):
 
 
 class HadamardResidual(BaseModule):
-    def __init__(self, c1, c2, k, s, d, act):
+    def __init__(self, c1, c2, ce, k, s, d, se, act):
         super().__init__()
         
         assert 1 <= s <= 2, f"illegal stride value '{s}'"
@@ -127,21 +141,23 @@ class HadamardResidual(BaseModule):
         layers: List[nn.Module] = []
 
         # hadamard-expansion
-        expand_layer = HadamardExpansion(c1, norm=nn.BatchNorm2d)
-        ce = expand_layer.ce
+        layers.append(
+            HadamardExpansion(c1, ce)
+        )
+        ce += c1
         
         # depthwise-convolution
         s = 1 if d > 1 else s
-        dw_conv_layer = ConvNormAct(ce, ce, k=k, s=s, g=ce, d=d, norm=nn.BatchNorm2d, act=act)
+        layers.append(
+            ConvNormAct(ce, ce, k=k, s=s, g=ce, d=d, norm=nn.BatchNorm2d, act=act)
+        )
+        if se:
+            layers.append(SElayer(ce, ce // 4, scale_activation=nn.Hardsigmoid))
             
-        # hadamard-compression TODO
-        project_layer = ConvNormAct(ce, c2, k=1, norm=nn.BatchNorm2d, act=None)
-
-        layers.extend([
-            expand_layer,
-            dw_conv_layer,
-            project_layer,
-        ])
+        # project
+        layers.append(
+            ConvNormAct(ce, c2, k=1, norm=nn.BatchNorm2d, act=None)
+        )
         
         self.block = nn.Sequential(*layers)
         
@@ -155,7 +171,7 @@ class HadamardResidual(BaseModule):
     def yaml_args_parser(channels, former, modules, args) -> Tuple[int, int, list, dict]:
         '''
         yaml format:
-        [former, repeats, InvertedResidual, [c2, k, s, d, act]]
+        [former, repeats, InvertedResidual, [c2, ce, k, s, d, se, act]]
         '''
         c1 = channels[former]
         c2 = args[0]
