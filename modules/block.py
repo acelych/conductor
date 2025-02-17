@@ -79,8 +79,8 @@ class HadamardExpansion(nn.Module):
         can_idx = 0
         for i in range(c1):
             for j in range(i + 1, c1):
-                can_idx_loc[can_idx * 2] = (0, can_idx, i)
-                can_idx_loc[can_idx * 2 + 1] = (1, can_idx, j)
+                can_idx_loc[:, can_idx * 2] = torch.tensor([0, can_idx, i])
+                can_idx_loc[:, can_idx * 2 + 1] = torch.tensor([1, can_idx, j])
                 can_idx += 1
         self.candidates_met = torch.sparse_coo_tensor(indices=can_idx_loc, values=can_idx_val)
 

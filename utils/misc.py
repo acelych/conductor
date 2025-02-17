@@ -5,7 +5,11 @@ import thop
 import torch
 from torch import nn, optim
 
-LR_Scheduler = Union[optim.lr_scheduler.LRScheduler, optim.lr_scheduler.ReduceLROnPlateau]
+try:
+    _lr_sch = getattr(optim.lr_scheduler, 'LRScheduler')
+except AttributeError:
+    _lr_sch = getattr(optim.lr_scheduler, '_LRScheduler')
+LR_Scheduler = Union[_lr_sch, optim.lr_scheduler.ReduceLROnPlateau]
 
 def get_module_class_str(obj: object) -> str:
     if not isinstance(obj, type):
