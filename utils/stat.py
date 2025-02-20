@@ -1,9 +1,6 @@
 import time
 from typing import List
 
-import numpy as np
-import matplotlib.pyplot as plt
-
 import torch
 import torch.distributed as dist
 from torch import Tensor
@@ -23,7 +20,7 @@ class Calculate:
         return correct.sum().item() / label.size(0)
     
     @staticmethod
-    def top1_accuracy(conf_mat: Tensor):
+    def top1_accuracy(conf_mat: Tensor) -> Tensor:
         '''
         This method should be used with confusion matrix,
         for calculate top1-acc in dataloader, using topk_accuracy(..., k=1)
@@ -33,7 +30,7 @@ class Calculate:
         return TP_all / conf_mat.sum()
 
     @staticmethod
-    def precision(conf_mat: Tensor):
+    def precision(conf_mat: Tensor) -> Tensor:
         res = torch.zeros(conf_mat.shape[0], dtype=torch.float32, device=torch.cuda.current_device())
         for i in range(conf_mat.shape[0]):
             TP = conf_mat[i, i]
@@ -42,7 +39,7 @@ class Calculate:
         return res
 
     @staticmethod
-    def recall(conf_mat: Tensor):
+    def recall(conf_mat: Tensor) -> Tensor:
         res = torch.zeros(conf_mat.shape[0], dtype=torch.float32, device=torch.cuda.current_device())
         for i in range(conf_mat.shape[0]):
             TP = conf_mat[i, i]
@@ -50,43 +47,6 @@ class Calculate:
             res[i] = TP / (TP_FN + 1e-8)
         return res
     
-class Plot:
-    @staticmethod
-    def plot_line_chart(epochs: np.ndarray, train_loss: np.ndarray, val_loss: np.ndarray, precision: np.ndarray, recall: np.ndarray, top1: np.ndarray):
-        fig, axs = plt.subplots(2, 2, figsize=(10, 10))
-        plt.subplots_adjust(wspace=0.3, hspace=0.3)
-
-        axs[0, 0].plot(epochs, train_loss, color='blue', linewidth=1, label='Train Loss')
-        axs[0, 0].plot(epochs, val_loss, color='red', linewidth=1, label='Val Loss')
-        axs[0, 0].set_title('Train Loss vs Val Loss')
-        axs[0, 0].set_xlabel('Epochs')
-        axs[0, 0].set_ylabel('Loss')
-        axs[0, 0].legend()
-        axs[0, 0].grid(True)
-
-        axs[0, 1].plot(epochs, precision, color='green', linewidth=1, label='Precision')
-        axs[0, 1].set_title('Precision')
-        axs[0, 1].set_xlabel('Epochs')
-        axs[0, 1].set_ylabel('Precision')
-        axs[0, 1].legend()
-        axs[0, 1].grid(True)
-
-        axs[1, 0].plot(epochs, recall, color='purple', linewidth=1, label='Recall')
-        axs[1, 0].set_title('Recall')
-        axs[1, 0].set_xlabel('Epochs')
-        axs[1, 0].set_ylabel('Recall')
-        axs[1, 0].legend()
-        axs[1, 0].grid(True)
-
-        axs[1, 1].plot(epochs, top1, color='orange', linewidth=1, label='Top-1')
-        axs[1, 1].set_title('Top-1 Accuracy')
-        axs[1, 1].set_xlabel('Epochs')
-        axs[1, 1].set_ylabel('Top-1')
-        axs[1, 1].legend()
-        axs[1, 1].grid(True)
-        
-        plt.savefig('./temp.png')
-        plt.close()
 
 class Recorder:
     def __init__(self, num_classes: int, k: int = 5):
@@ -166,8 +126,16 @@ class MetricsManager:
         def filled(self) -> bool:
             return all(v is not None for v in vars(self).values())
         
+        def dummy_fill(self):
+            for key in self.__dict__:
+                if self.__dict__[key] is None:
+                    self.__dict__[key] = float('nan')
+        
         def get_heads(self) -> tuple:
             return tuple(vars(self).keys())
+        
+        def get_plot_form(self) -> dict:
+            return {'x_axis': 'epoch'}
         
         def record_train(self, loss: Tensor):
             raise NotImplementedError
@@ -184,6 +152,20 @@ class MetricsManager:
             self.top5_acc = kwargs.get('top5_acc')
             self.precision = kwargs.get('precision')
             self.recall = kwargs.get('recall')
+            
+        def get_plot_form(self):
+            form = super().get_plot_form()
+            form.update({
+                'y_axis': [
+                    ('train_loss', 'val_loss'),
+                    'top1_acc',
+                    'top5_acc',
+                    'precision',
+                    'recall',
+                    'learn_rate',
+                ]
+            })
+            return form
             
         def record_train(self, loss):
             self.train_loss = loss

@@ -1,7 +1,8 @@
 import yaml
 import shutil
 from pathlib import Path
-from typing import Any, Dict, Tuple, Union, Sequence
+from typing import Any, Dict, Tuple, List, Union, Sequence
+from PIL import Image
 
 import pandas as pd
 
@@ -11,6 +12,7 @@ from torch import nn, optim, cuda
 from .resources import ResourceManager
 from .stat import MetricsManager
 from .misc import LR_Scheduler, get_module_class_str
+from .plot import Plot
 
 class ConfigManager:
     def __init__(
@@ -54,7 +56,7 @@ class ConfigManager:
     def info(self) -> list:
         info_list = ["###  CONFIG  ###"]
         for k, v in vars(self).items():
-            if v.__class__ not in [str, list, float, int] and not isinstance(v, Path):
+            if v.__class__ not in [str, list, tuple, float, int, None] and not isinstance(v, Path):
                 v = get_module_class_str(v)
             info_list.append(f"{k}: {v}")
         return info_list
@@ -213,16 +215,20 @@ class ArtifactManager:
         self.console_logger_path = self.taskdir / 'console.log'
         self.metrics_logger_path = self.taskdir / 'metrics.csv'
         self.weights_dir = self.taskdir / 'weights'
-        self.weights_dir.mkdir()
         self.best = self.weights_dir / 'best.pt'
         self.last = self.weights_dir / 'last.pt'
+        self.result = self.taskdir / 'result.png'
 
         # File
         ckpt = getattr(cm, 'ckpt')
         self.ckpt: dict = torch.load(ckpt) if ckpt else None  # load ckpt if available
+        if cm.command == 'test' and self.ckpt is None:
+            raise AssertionError(f"expect ckpt for testing")
         
-        metrics_heads = MetricsManager.get_metrics_holder(cm.task).get_heads()
-        pd.DataFrame({k: [] for k in metrics_heads}).to_csv(self.metrics_logger_path, index=False)  # init indexes logger
+        if cm.command == 'train':
+            self.weights_dir.mkdir()  # prepare dir for trained weights
+            metrics_heads = MetricsManager.get_metrics_holder(cm.task).get_heads()
+            pd.DataFrame({k: [] for k in metrics_heads}).to_csv(self.metrics_logger_path, index=False)  # init indexes logger
 
     def info(self, content: str):
         with open(self.console_logger_path, 'a') as f:
@@ -231,6 +237,14 @@ class ArtifactManager:
     def metrics(self, content: dict):
         content = {k: [v] for k, v in content.items()}
         pd.DataFrame(content).to_csv(self.metrics_logger_path, mode='a', header=False, index=False)
+        
+    def plot_metrics(self, metrics_collcet: List[MetricsManager.Metrics]):
+        Plot.plot_line_chart(metrics_collcet, self.result)
+        
+    def plot_samples(self, stage: str, samples: List[Image.Image], label: list, pred: list, category_name: str = None):
+        filename = f"sample{'_' + category_name if isinstance(category_name, str) else ''}_{stage}.png"
+        sample_path = self.taskdir / filename
+        Plot.plot_classify_sampling(samples, label, pred, sample_path)
 
 
 def get_default_taskdir_name(output_dir: Path):

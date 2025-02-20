@@ -8,9 +8,10 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 
 from .model import ModelManager
 from .data import DataLoaderManager
-from .utils import ConfigManager, ArtifactManager, MetricsManager, Recorder, LogInterface, LR_Scheduler, get_model_assessment
+from .utils import ConfigManager, ArtifactManager, MetricsManager, Calculate, Recorder, LogInterface, LR_Scheduler, get_model_assessment
+from .test import Tester
 
-class Trainer:
+class Trainer(Tester):
     def __init__(self, 
                  rank: int, 
                  cm: ConfigManager, 
@@ -48,6 +49,7 @@ class Trainer:
 
         train_dataloader = self.data_mng.get_dataloader("train", rank=self.rank)
         val_dataloader = self.data_mng.get_dataloader("val", rank=self.rank)
+        test_dataleader = self.data_mng.get_dataloader("test", rank=self.rank)
         
         model = self.model_mng.build_model()
         if self.cm.isddp():
@@ -64,12 +66,12 @@ class Trainer:
         
         if self.isactive():
             self.log.info(self.model.info(), fn=True)
-            model_assessment, _ = get_model_assessment(self.model, self.cm.imgsz)
+            model_assessment, _ = get_model_assessment(self.model, self.cm.imgsz, lambda:self.model_mng.build_model().to(self.cm.device))
             self.log.info(model_assessment, fn=True)
 
         self.met_mng.start()
 
-        for self.epoch in range(self.load_state(), self.cm.epochs):
+        for self.epoch in range(self.load_state(self.am.ckpt), self.cm.epochs):
             metrics = self.met_mng.get_metrics_holder(self.cm.task, self.epoch)
             
             # learn & val
@@ -89,6 +91,24 @@ class Trainer:
             self.save_state(val_loss)  # save last & probably best
 
         if self.isactive():
+            # test
+            metrics = self.met_mng.get_metrics_holder(self.cm.task, self.epoch)
+            best_epoch = self.load_state(torch.load(self.am.best)) - 1
+            test_report, precision, _ = self.test_epoch(test_dataleader, metrics, best_epoch)
+            metrics.dummy_fill()
+            self.log.metrics(vars(metrics), save=False)
+            self.log.info(test_report)
+            # latency
+            self.latency()
+            # sampling
+            self.sampling("train")
+            self.sampling("test")
+            # focusing
+            worst_category = precision.argmin()
+            self.focusing("train", worst_category.item())
+            self.focusing("test", worst_category.item())
+            self.am.plot_metrics(self.met_mng.metrics_collect)
+            # save caches
             self.data_mng.save_caches()
     
     def train_epoch(self, dataloader: DataLoader, metrics: MetricsManager.Metrics):
@@ -125,16 +145,17 @@ class Trainer:
         if self.isactive():
             self.log.bar_init(len(dataloader), self.get_bar_desc('val'))
 
-        for x, label in dataloader:
-            x, label = self.move_batch(x, label)
-            output = self.model(x)
-            loss: Tensor = self.criterion(output, label)
-            self.recorder(output, label, loss)
+        with torch.no_grad():
+            for x, label in dataloader:
+                x, label = self.move_batch(x, label)
+                output = self.model(x)
+                loss: Tensor = self.criterion(output, label)
+                self.recorder(output, label, loss)
+                if self.isactive():
+                    self.log.bar_update()
             if self.isactive():
-                self.log.bar_update()
-        if self.isactive():
-            self.log.bar_close()
-        self.recorder.converge()
+                self.log.bar_close()
+            self.recorder.converge()
         
         # let one of the devices fill the blanks
         if self.isactive():
@@ -163,10 +184,12 @@ class Trainer:
         buffer = io.BytesIO()
         torch.save(
             {
+                'model_desc': self.model_mng.model_desc,
                 'model_state_dict': self.model.state_dict(),
                 'opt_state_dict': self.optimizer.state_dict(),
                 'lrs_state_dict': self.scheduler.state_dict(),
                 'epoch': self.epoch,
+                'best_fitness': self.best_fitness,
             },
             buffer
         )
@@ -176,22 +199,22 @@ class Trainer:
         if curr_fitness == self.best_fitness:
             self.am.best.write_bytes(serialized_ckpt)
 
-    def load_state(self) -> int:
-        if self.am.ckpt:
-            self.model.load_state_dict(self.am.ckpt.get('model_state_dict'))
-            self.optimizer.load_state_dict(self.am.ckpt.get('opt_state_dict'))
-            self.scheduler.load_state_dict(self.am.ckpt.get('lrs_state_dict'))
-            return self.am.ckpt.get('epoch') + 1
+    def load_state(self, ckpt: dict) -> int:
+        if ckpt:
+            self.model.load_state_dict(ckpt.get('model_state_dict'))
+            self.optimizer.load_state_dict(ckpt.get('opt_state_dict'))
+            self.scheduler.load_state_dict(ckpt.get('lrs_state_dict'))
+            self.best_fitness = ckpt.get('best_fitness')
+            return ckpt.get('epoch') + 1
         else:
             return 0
-        
-    def move_batch(self, *args: Tensor) -> tuple:
-        return (arg.to(self.device) for arg in args)
     
-    def get_bar_desc(self, stage: str, etc = None) -> str:
-        result = f"({stage}) {self.epoch}/{self.cm.epochs}"
-        if etc:
-            result = f"{result} {etc}"
+    def get_bar_desc(self, stage: str, show_epoch = True, etc = None) -> str:
+        result = f"({stage})"
+        if show_epoch:
+            result += f" {self.epoch}/{self.cm.epochs}"
+        if etc is not None:
+            result += f" {etc}"
         return result
     
     def isactive(self) -> bool:

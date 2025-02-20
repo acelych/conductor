@@ -104,39 +104,39 @@ class ModelManager():
         return f"(torchvision model) {get_module_class_str(obj)}"
         
     def build_model(self, input_dim=3) -> Union[Model, nn.Module]:
-
+        
         if self.model_type == 'yaml':
-
-            channels = [input_dim]
-            layers = nn.ModuleList()
-            save: Set[int] = set()
-            layers_desc = self.model_desc.get("backbone") + self.model_desc.get("head")
-            
-            for i, (f, n, m, args) in enumerate(layers_desc):
-                assert all(i >= x for x in ([f] if isinstance(f, int) else f)), f"expect former layers of layer {i}, got {f}"
-                assert n >= 1, f"expect n of layer {i} >= 1, got {n}"
-                
-                m: BaseModule = ModuleProvider.get_module(m)
-                c1, c2, args, kwargs = m.yaml_args_parser(channels, f, ModuleProvider.get_modules(), args)
-                
-                if i == 0:
-                    channels = [c2]
-                else:
-                    channels.append(c2)
-                    
-                save.union(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)
-                _m = nn.Sequential(*(m(*args, **kwargs) for _ in range(n))) if n > 1 else m(*args, **kwargs)
-                _m.i, _m.f, _m.n, _m.p, _m.t, _m.args = i, f, n, sum(x.numel() for x in _m.parameters()), m.__module__ + '.' + m.__name__, args
-                layers.append(_m)
-                
-            return Model(layers, sorted(list(save)))
+            return self.build_desc_model(self.model_desc, input_dim)
         
         elif self.model_type == 'tv':
             tv_model = self.tv_builder(**self.tv_kwargs)
             setattr(tv_model, 'info', lambda :self.tv_info(tv_model))
             return tv_model
         
-                    
+    @staticmethod
+    def build_desc_model(model_desc: dict, input_dim=3) -> Model:
+        channels = [input_dim]
+        layers = nn.ModuleList()
+        save: Set[int] = set()
+        layers_desc = model_desc.get("backbone") + model_desc.get("head")
+        
+        for i, (f, n, m, args) in enumerate(layers_desc):
+            assert all(i >= x for x in ([f] if isinstance(f, int) else f)), f"expect former layers of layer {i}, got {f}"
+            assert n >= 1, f"expect n of layer {i} >= 1, got {n}"
+            
+            m: BaseModule = ModuleProvider.get_module(m)
+            c1, c2, args, kwargs = m.yaml_args_parser(channels, f, ModuleProvider.get_modules(), args)
+            
+            if i == 0:
+                channels = [c2]
+            else:
+                channels.append(c2)
                 
+            save.union(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)
+            _m = nn.Sequential(*(m(*args, **kwargs) for _ in range(n))) if n > 1 else m(*args, **kwargs)
+            _m.i, _m.f, _m.n, _m.p, _m.t, _m.args = i, f, n, sum(x.numel() for x in _m.parameters()), m.__module__ + '.' + m.__name__, args
+            layers.append(_m)
+            
+        return Model(layers, sorted(list(save)))
             
                 

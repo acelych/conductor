@@ -1,7 +1,7 @@
 import yaml
 import pickle
 from io import BytesIO
-from typing import Any
+from typing import Any, Tuple
 from pathlib import Path
 
 import pandas as pd
@@ -30,7 +30,7 @@ class ClassifyDataset(Dataset):
         self.data: Any = None
         self.cache = get_cache(data_path)
         self.format = format
-        self.trm = self.get_transforms(imgsz, enhance, mean, std)
+        self.trm_enhance, self.trm_tensor = self.get_transforms(imgsz, enhance, mean, std)
 
         if format == 'parquet':
             self.data = pd.read_parquet(self.data_path)
@@ -39,24 +39,29 @@ class ClassifyDataset(Dataset):
     
     def __len__(self):
         if self.format == 'parquet':
-            return self._len_all()
+            return self._len_all_()
         
     def __getitem__(self, index):
+        img, label = self._getitem_original_(index)
+        return self.trm_tensor(img), label
+        
+    def _getitem_original_(self, index):
         if index in self.cache:
             img, label = self.cache[index]
         else:
             if self.format == 'parquet':
-                img, label = self._getitem_parquet(index)
+                img, label = self._getitem_parquet_(index)
             elif True:
                 pass # TODO
             self.cache[index] = (img, label)
             
-        return self.trm(img), label
+        img = self.trm_enhance(img)
+        return img, label
 
-    def _len_all(self):
+    def _len_all_(self):
         return len(self.data)
 
-    def _getitem_parquet(self, index):
+    def _getitem_parquet_(self, index):
         tar = self.data.loc[index]
         img, label = tar['img']['bytes'], tar['fine_label']
         img = Image.open(BytesIO(img))
@@ -64,16 +69,16 @@ class ClassifyDataset(Dataset):
     
     @staticmethod
     def get_transforms(imgsz: tuple, enhance: bool = False, mean: list = None, std: list = None):
-        trm = [transforms.Resize(imgsz)]
+        trm_enhance = [transforms.Resize(imgsz)]
         if enhance:
-            trm.extend([
-                transforms.RandomCrop(224, padding=4),
+            trm_enhance.extend([
+                transforms.RandomCrop(min(imgsz), padding=4),
                 transforms.RandomHorizontalFlip(),
             ])
-        trm.append(transforms.ToTensor())
+        trm_tensor = [transforms.ToTensor()]
         if mean and std:
-            trm.append(transforms.Normalize(mean=mean, std=std))
-        return transforms.Compose(trm)
+            trm_tensor.append(transforms.Normalize(mean=mean, std=std))
+        return transforms.Compose(trm_enhance), transforms.Compose(trm_tensor)
 
 
 class DataLoaderManager:
@@ -113,7 +118,7 @@ class DataLoaderManager:
         else:
             pass  #TODO
             
-        self.names = data_desc.get("names")
+        self.names: dict = data_desc.get("names")
 
     def save_caches(self):
         all_data = [self.train_data, self.test_data]
@@ -123,26 +128,32 @@ class DataLoaderManager:
             cache_path = save_cache(data.data_path, data.cache)
             if cache_path:
                 self.log.info(f"dataset cache saved to {cache_path}")
+                
+    def get_dataset(self, stage: str):
+        if stage == "train":
+            return self.train_data
+        elif stage == "test":
+            return self.test_data
+        elif stage == "val":
+            return self.val_data
+        else:
+            raise AssertionError(f"expect legal stage (train, test, val), got {stage}")
         
     def get_dataloader(self, stage: str, rank = None):
         using_ddp = self.cm.isddp()
         if using_ddp:
             assert isinstance(rank, int), f"expect exact rank number for ddp training."
         
-        if stage == "train":
-            dataset = self.train_data
-            shuffle = True
-        elif stage == "test":
-            dataset = self.test_data
-            shuffle = False
-        elif stage == "val":
-            dataset = self.val_data
-            shuffle = False
-        else:
-            raise AssertionError(f"expect legal stage (train, test, val), got {stage}")
+        dataset = self.get_dataset(stage=stage)
+        shuffle = True if stage == "train" else False
         
         sampler = DistributedSampler(dataset, num_replicas=len(self.cm.world), rank=rank) if using_ddp else None
         return DataLoader(dataset, batch_size=self.cm.batch_size, sampler=sampler, shuffle=shuffle)
+    
+    def get_with_original(self, stage: str, index: int):
+        dataset = self.get_dataset(stage=stage)
+        original_img, label = dataset._getitem_original_(index)
+        return original_img, dataset.trm_tensor(original_img), label
 
 def get_cache_path(path: Path) -> Path:
     if path.is_file():

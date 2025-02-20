@@ -7,6 +7,7 @@ import torch
 from .model import ModelManager
 from .data import DataLoaderManager
 from .train import TrainerManager
+from .test import Tester
 from .utils import ConfigManager, ArtifactManager, LogInterface, MetricsManager
 
 
@@ -30,8 +31,9 @@ class Conductor:
         if self.cm.command == 'train':
             orch = TrainerManager(self.cm, self.am, self.log)
             orch.train()
-        elif self.cm.command == 'predict':
-            pass
+        elif self.cm.command == 'test':
+            orch = Tester(self.cm, self.am, self.log)
+            orch.test()
         elif self.cm.command == 'benchmark':
             pass
         

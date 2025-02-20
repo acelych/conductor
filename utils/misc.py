@@ -1,4 +1,4 @@
-from typing import Tuple, Union, Sequence
+from typing import Tuple, Union, Sequence, Callable
 from copy import deepcopy
 
 import thop
@@ -21,7 +21,7 @@ def get_module_class_str(obj: object) -> str:
     else:
         return class_str
 
-def get_model_assessment(model: nn.Module, imgsz=244) -> Tuple[str, Tuple]:
+def get_model_assessment(model: nn.Module, imgsz: Union[int, Sequence] = 244, model_mirror: Callable = None) -> Tuple[str, Tuple]:
     if not isinstance(imgsz, Sequence):
         imgsz = (imgsz, imgsz)  # expand if int/float
 
@@ -31,7 +31,13 @@ def get_model_assessment(model: nn.Module, imgsz=244) -> Tuple[str, Tuple]:
 
     p = next(model.parameters())
     im = torch.empty((1, p.shape[1], *imgsz), device=p.device)  # input image in BCHW format
-    model_ = deepcopy(model.module if isinstance(model, (nn.parallel.DistributedDataParallel)) else model)
+    try:
+        model_ = deepcopy(model.module if isinstance(model, (nn.parallel.DistributedDataParallel)) else model)
+    except Exception as e:
+        if model_mirror:
+            model_ = model_mirror()
+        else:
+            raise(e)
     gflops = thop.profile(model_, inputs=[im], verbose=False)[0] / 1e9 * 2  # imgsz GFLOPs
 
     info = f"model summary: {n_l:,} layers; {n_p:,} parameters; {n_g:,} gradients; {gflops:,} GFLOPs (within {imgsz})"

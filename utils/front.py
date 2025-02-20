@@ -28,7 +28,7 @@ class LogInterface:
         if bn:
             self.info('')
 
-    def metrics(self, met: dict):
+    def metrics(self, met: dict, save: bool = True):
         k_str, v_str = '', ''
         for k, v in met.items():
             if isinstance(v, int):
@@ -41,7 +41,8 @@ class LogInterface:
             k_str += f"{k:<15}"
             v_str += v
         self.info([k_str, v_str])
-        self.am.metrics(met)
+        if save:
+            self.am.metrics(met)
 
     def bar_init(self, total: int, desc: str, fn: bool = False):
         if fn:
