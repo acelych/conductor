@@ -92,7 +92,9 @@ class HadamardExpansion(nn.Module):
         self.tau_adj = nn.Parameter(torch.tensor(0), requires_grad=False)
 
         # normalize
-        self.norm = nn.BatchNorm2d(c1 + ce)
+        # self.norm = nn.BatchNorm2d(c1 + ce)
+        self.norm = nn.LayerNorm(ce)
+        # self.norm = nn.InstanceNorm2d(ce, affine=True)
         
         # initialize
         torch.nn.init.uniform_(self.logits, a=-0.1, b=0.1)
@@ -110,7 +112,8 @@ class HadamardExpansion(nn.Module):
             x_i = x[:, self.selected_seq[0], ...]
             x_j = x[:, self.selected_seq[1], ...]
         x_expand = x_i * x_j
-        return self.norm(torch.cat([x, x_expand], dim=1))
+        x_expand = self.norm(x_expand.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+        return torch.cat([x, x_expand], dim=1)
         
     def _update_mask(self):
         mask = nn.functional.gumbel_softmax(self.logits, tau=self.tau)

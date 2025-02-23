@@ -33,6 +33,7 @@ class ConfigManager:
         batch_size: int = None,
         epochs: int = 300,
         imgsz: Union[int, tuple] = (224, 224),
+        best_metrics: str = "val_loss",
         **kwargs: Dict[str, Any],  # accept unexpected args
         ):
         self.model_yaml_path: Path = Path(model_yaml_path)
@@ -51,6 +52,7 @@ class ConfigManager:
         self.batch_size = batch_size if batch_size else (len(world) * 16 if world else 16)
         self.epochs = int(epochs)
         self.imgsz = imgsz
+        self.best_metrics = best_metrics
         self.__dict__.update(kwargs)
 
     def info(self) -> list:

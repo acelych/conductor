@@ -37,7 +37,7 @@ class Model(nn.Module):
     
     def info(self) -> List[str]:
         head = [f"{'':>3}{'from':>8}{'n':>3}{'params':>10}  {'module':<45}{'arguments':<30}"]
-        layerinfo = [f"{item.i:>3}{str(item.f):>8}{item.n:>3}{item.p:10.0f}  {item.t:<45}{str(item.args):<30}" for item in self.layers]
+        layerinfo = [f"{item.i:>3}{str(item.f):>8}{item.n:>3}{item.p:10.0f}  {item.t:<45}{item.args:<30}" for item in self.layers]
         return head + layerinfo
     
     def _init_weights(self, m):
@@ -134,7 +134,10 @@ class ModelManager():
                 
             save.union(x % i for x in ([f] if isinstance(f, int) else f) if x != -1)
             _m = nn.Sequential(*(m(*args, **kwargs) for _ in range(n))) if n > 1 else m(*args, **kwargs)
-            _m.i, _m.f, _m.n, _m.p, _m.t, _m.args = i, f, n, sum(x.numel() for x in _m.parameters()), m.__module__ + '.' + m.__name__, args
+            _m.i, _m.f, _m.n = i, f, n
+            _m.p = sum(x.numel() for x in _m.parameters())
+            _m.t = m.__module__ + '.' + m.__name__
+            _m.args = ' '.join([str(args), str(kwargs)])
             layers.append(_m)
             
         return Model(layers, sorted(list(save)))

@@ -78,6 +78,7 @@ class Recorder:
         This method should be only called ONCE for converging data from all devices
         '''
         assert not self.is_converged, "recorder is already converged"
+        self.loss = [loss for loss in self.loss if loss != float('nan')]
         self.mean_loss = sum(self.loss) / len(self.loss)
         self.mean_topk = sum(self.topk) / len(self.topk)
         if not dist.is_initialized():

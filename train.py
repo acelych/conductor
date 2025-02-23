@@ -1,3 +1,5 @@
+from typing import Tuple, Callable
+
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -22,7 +24,6 @@ class Trainer(Tester):
                  met_mng: MetricsManager, ):
         
         self.active_rank = {-1, }
-        self.device = torch.device(cm.device)
 
         if cm.isddp():
             torch.cuda.set_device(cm.world[rank])
@@ -33,6 +34,9 @@ class Trainer(Tester):
             )
             self.active_rank.add(cm.world[0])
             self.device = torch.cuda.device(rank)
+        else:
+            torch.cuda.set_device(cm.world[0])
+            self.device = torch.cuda.current_device()
 
         self.rank = rank
         self.cm = cm
@@ -82,13 +86,14 @@ class Trainer(Tester):
                 continue
 
             # scheduler & fitness
+            best_fitness, rule = self.get_best_fitness(metrics)
             self.step_scheduler(val_loss, metrics)
-            self.step_fitness(val_loss)
+            self.step_fitness(best_fitness, rule)
             
             # metrics & save
             metrics = self.met_mng(metrics)  # add time stick & save to met_mng
             self.log.metrics(vars(metrics))  # write to metrics.csv
-            self.save_state(val_loss)  # save last & probably best
+            self.save_state(best_fitness)  # save last & probably best
 
         if self.isactive():
             # test
@@ -173,10 +178,10 @@ class Trainer(Tester):
             self.scheduler.step()
         met.learn_rate = self.scheduler.get_last_lr()[0]
 
-    def step_fitness(self, val_loss: Number):
+    def step_fitness(self, best_fitness: Number, rule: Callable):
         if self.best_fitness is None:
-            self.best_fitness = val_loss
-        self.best_fitness = min(self.best_fitness, val_loss)
+            self.best_fitness = best_fitness
+        self.best_fitness = rule(self.best_fitness, best_fitness)
 
     def save_state(self, curr_fitness):
         import io
@@ -208,6 +213,11 @@ class Trainer(Tester):
             return ckpt.get('epoch') + 1
         else:
             return 0
+        
+    def get_best_fitness(self, metrics: MetricsManager.Metrics) -> Tuple[Number, Callable]:
+        assert self.cm.best_metrics in metrics.__dict__, f"unexpect metrics option '{self.cm.best_metrics}'"
+        rule = min if self.cm.best_metrics.endswith('loss') else max
+        return metrics.__dict__.get(self.cm.best_metrics), rule
     
     def get_bar_desc(self, stage: str, show_epoch = True, etc = None) -> str:
         result = f"({stage})"
