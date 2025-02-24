@@ -33,7 +33,10 @@ class Tester:
         
         # testing
         best_epoch = self.load_state(self.am.ckpt)
-        test_report, precision, _ = self.test_epoch(test_dataleader, best_epoch)
+        metrics = self.met_mng.get_metrics_holder(self.cm.task, best_epoch)
+        test_report, precision, _ = self.test_epoch(test_dataleader, metrics, best_epoch)
+        metrics.dummy_fill()
+        self.log.metrics(vars(metrics), save=False)
         self.log.info(test_report)
         
         # latency
@@ -48,7 +51,7 @@ class Tester:
         self.focusing("train", worst_category.item())
         self.focusing("test", worst_category.item())
     
-    def test_epoch(self, dataloader: DataLoader, metrics: MetricsManager.Metrics, best_epoch: int) -> Tuple[list, Tensor, Tensor]:
+    def test_epoch(self, dataloader: DataLoader, metrics: MetricsManager.Metrics, best_epoch: int = -1) -> Tuple[list, Tensor, Tensor]:
         self.model.eval()
         self.recorder.clear()
 

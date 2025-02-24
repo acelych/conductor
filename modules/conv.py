@@ -1,6 +1,8 @@
 from typing import Sequence, Tuple, List
 
+import torch
 from torch import nn, Tensor
+from torch.nn import functional as F
 
 from ._utils import _convert_str2class, BaseModule
 
@@ -41,6 +43,25 @@ class ConvNormAct(BaseModule):
         act = _convert_str2class(args[2], modules)
         return c1, c2, [c1] + args[0], {'norm': norm, 'act': act}
     
+    
+class MeanFilter(nn.Module):
+    def __init__(self, channels: int, k_size: int = 3):
+        super().__init__()
+        self.channels = channels
+        self.k_size: tuple = k_size if isinstance(k_size, tuple) else (k_size, k_size)
+        self.padding = k_size // 2
+        
+        self.kernel: Tensor
+        self.register_buffer(
+            'kernel', 
+            torch.ones(channels, 1, *self.k_size) / (k_size * k_size),
+        )
+
+    def forward(self, x: Tensor) -> Tensor:
+        return F.conv2d(x, self.kernel, padding=self.padding, groups=self.channels)
+    
+    
 __all__ = [
-    "ConvNormAct"
+    "ConvNormAct",
+    "MeanFilter"
 ]

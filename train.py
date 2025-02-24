@@ -97,8 +97,8 @@ class Trainer(Tester):
 
         if self.isactive():
             # test
-            metrics = self.met_mng.get_metrics_holder(self.cm.task, self.epoch)
             best_epoch = self.load_state(torch.load(self.am.best)) - 1
+            metrics = self.met_mng.get_metrics_holder(self.cm.task, best_epoch)
             test_report, precision, _ = self.test_epoch(test_dataleader, metrics, best_epoch)
             metrics.dummy_fill()
             self.log.metrics(vars(metrics), save=False)
