@@ -1,7 +1,8 @@
 # example of instruction yaml
 
 # basics
-model_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/utils/resources/example/hadamard_exp.yaml
+# model_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/utils/resources/example/hadamard_exp.yaml
+model_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/utils/resources/example/mobilenetv3.yaml
 # model_yaml_path: mobilenet_v3_small,{'num_classes':100}
 data_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/temp/cifar100.yaml
 command: train  # command from cli, indicate the Conductor what to do
@@ -18,6 +19,7 @@ scheduler: CosineAnnealingLR
 learn_rate: 1e-3
 momentum: 0.9
 decay: 1e-4
+best_metrics: top1_acc
 
 # logging & ckpt details
 output_dir: C:/Workspace/DataScience/ComputerVision/conductor/temp/

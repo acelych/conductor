@@ -95,8 +95,9 @@ class HadamardExpansion(nn.Module):
         self.tau_adj = nn.Parameter(torch.tensor(0), requires_grad=False)
 
         # normalize
-        self.mean = MeanFilter(ce)
         self.norm = nn.BatchNorm2d(ce)
+        # self.norm = nn.LayerNorm(ce)
+        # self.norm = nn.InstanceNorm2d(ce, affine=True)
         
         # initialize
         torch.nn.init.uniform_(self.logits, a=-0.1, b=0.1)
@@ -115,11 +116,7 @@ class HadamardExpansion(nn.Module):
             x_i = x[:, self.selected_seq[0], ...]
             x_j = x[:, self.selected_seq[1], ...]
         x_expand = x_i * x_j
-        # if x_expand.isnan().any():
-        #     ma, mi = x_expand.max(), x_expand.min()
         x_expand = self.norm(x_expand)
-        # x_expand = self.mean(x_expand)
-        # return x_expand
         return torch.cat([x, x_expand], dim=1)
         
     def _update_mask(self):
