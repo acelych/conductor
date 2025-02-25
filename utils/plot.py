@@ -1,7 +1,10 @@
+import io
 import math
+import torch
 import colorsys
 import matplotlib.pyplot as plt
 
+from torch import Tensor
 from typing import List
 from PIL import Image, ImageDraw, ImageFont
 
@@ -100,6 +103,57 @@ class Plot:
                 draw.text((x, y + height), text=text, font=font, align="right", fill=(0, 0, 0))
                 
         canvas.save(save_path)
+        
+    @staticmethod
+    def plot_imgs(save_path: str, imgs: List[Image.Image], label: list = None):
+        width, height = imgs[0].size
+        img_num = len(imgs)
+        words_gap = 18 if label else 0
+        cols, rows = _find_close_factors(img_num)
+        canvas_width, canvas_height = cols * width, rows * (height + words_gap)
+        
+        canvas = Image.new('RGB', (canvas_width, canvas_height), (255, 255, 255))
+        # font = ImageFont.load_default(size=10)
+        font = ImageFont.truetype("arial.ttf", size=15)
+        draw = ImageDraw.Draw(canvas)
+        
+        for row in range(rows):
+            for col in range(cols):
+                # img
+                idx = row * cols + col
+                x = col * width
+                y = row * (height + words_gap)
+                canvas.paste(imgs[idx], (x, y))
+                # text
+                if label:
+                    text = label[idx]
+                    bbox = draw.textbbox((0, 0), text=text, font=font, align="center")
+                    x += (width - (bbox[2] - bbox[0])) // 2
+                    # y += (words_gap - (bbox[3] - bbox[1])) // 2
+                    draw.text((x, y + height), text=text, font=font, align="center", fill=(0, 0, 0))
+                
+        canvas.save(save_path)
+        
+    @staticmethod
+    def plot_matrix(mat: Tensor) -> Image.Image:
+        assert len(mat.shape) == 2, f"expect 2D matrix, got dimension {len(mat.shape)}"
+        fig, ax = plt.subplots()
+        cax = ax.imshow(mat, cmap='viridis', interpolation='nearest')
+        fig.colorbar(cax)
+        
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        return Image.open(buf)
+
+    @staticmethod
+    def vis_matrix(mat: Tensor, minn: float = None, maxn: float = None):
+        assert len(mat.shape) == 2, f"expect 2D matrix, got dimension {len(mat.shape)}"
+        if minn is None or maxn is None:
+            maxn, minn = mat.max(), mat.min()
+        diff = maxn - minn
+        mat_0_255 = ((mat - minn) / diff) * 255
+        return Image.fromarray(mat_0_255.to(dtype=torch.uint8).numpy())
 
 if __name__ == '__main__':
     import pandas as pd
