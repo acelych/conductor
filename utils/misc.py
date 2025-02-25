@@ -11,7 +11,7 @@ except AttributeError:
     _lr_sch = getattr(optim.lr_scheduler, '_LRScheduler')
 LR_Scheduler = Union[_lr_sch, optim.lr_scheduler.ReduceLROnPlateau]
 
-BUILTIN_TYPE = [int, float, str, list, dict, tuple, set, frozenset, bytes, bytearray]
+BUILTIN_TYPE = [int, float, bool, str, list, dict, tuple, set, frozenset, bytes, bytearray]
 
 def get_module_class_str(obj: object) -> str:
     if not isinstance(obj, type):
