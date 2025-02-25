@@ -260,3 +260,33 @@ class HadamardResidual(BaseModule):
         c2 = args[0]
         act_type = _convert_str2class(args[-1], modules)  # get act
         return c1, c2, [c1] + args[:-1] + [act_type], dict()
+
+
+class StarBlock(BaseModule):
+    def __init__(self, dim, mlp_ratio=3):
+        super().__init__()
+        self.dwconv = ConvNormAct(dim, dim, 7, 1, (7 - 1) // 2, g=dim, norm=nn.BatchNorm2d, act=None)
+        self.f1 = ConvNormAct(dim, mlp_ratio * dim, 1, norm=None, act=None)
+        self.f2 = ConvNormAct(dim, mlp_ratio * dim, 1, norm=None, act=None)
+        self.g = ConvNormAct(mlp_ratio * dim, dim, 1, norm=nn.BatchNorm2d, act=None)
+        self.dwconv2 = ConvNormAct(dim, dim, 7, 1, (7 - 1) // 2, g=dim, norm=nn.BatchNorm2d, act=None)
+        self.act = nn.ReLU6()
+
+    def forward(self, x):
+        input = x
+        x = self.dwconv(x)
+        x1, x2 = self.f1(x), self.f2(x)
+        x = self.act(x1) * x2
+        x = self.dwconv2(self.g(x))
+        x = input + x
+        return x
+    
+    @staticmethod
+    def yaml_args_parser(channels, former, modules, args) -> Tuple[int, int, list, dict]:
+        '''
+        yaml format:
+        [former, repeats, BaseModule, [dim, ratio]]
+        '''
+        c1 = channels[former]
+        c2 = args[0]
+        return c1, c2, args, dict()

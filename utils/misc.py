@@ -11,6 +11,8 @@ except AttributeError:
     _lr_sch = getattr(optim.lr_scheduler, '_LRScheduler')
 LR_Scheduler = Union[_lr_sch, optim.lr_scheduler.ReduceLROnPlateau]
 
+BUILTIN_TYPE = [int, float, str, list, dict, tuple, set, frozenset, bytes, bytearray]
+
 def get_module_class_str(obj: object) -> str:
     if not isinstance(obj, type):
         obj = obj.__class__
@@ -42,3 +44,6 @@ def get_model_assessment(model: nn.Module, imgsz: Union[int, Sequence] = 244, mo
 
     info = f"model summary: {n_l:,} layers; {n_p:,} parameters; {n_g:,} gradients; {gflops:,} GFLOPs (within {imgsz})"
     return info, (n_l, n_p, n_g, gflops)
+
+def isbuiltin(obj: object):
+    return obj.__class__ in BUILTIN_TYPE or obj is None

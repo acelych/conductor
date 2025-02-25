@@ -11,7 +11,7 @@ from torch import nn, optim, cuda
 
 from .resources import ResourceManager
 from .stat import MetricsManager
-from .misc import LR_Scheduler, get_module_class_str
+from .misc import LR_Scheduler, get_module_class_str, isbuiltin
 from .plot import Plot
 
 class ConfigManager:
@@ -58,7 +58,7 @@ class ConfigManager:
     def info(self) -> list:
         info_list = ["###  CONFIG  ###"]
         for k, v in vars(self).items():
-            if v.__class__ not in [str, list, tuple, float, int, None] and not isinstance(v, Path):
+            if not isbuiltin(v) and not isinstance(v, Path):
                 v = get_module_class_str(v)
             info_list.append(f"{k}: {v}")
         return info_list

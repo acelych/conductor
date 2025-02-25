@@ -11,7 +11,9 @@ class ModuleProvider():
         ConvNormAct,
         InvertedResidual,
         HadamardResidual,
-        Classifier
+        StarBlock,
+        Classifier,
+        ClassifierSimple,
     ]
     _modules: dict = {m.__name__: m for m in _modules}
     

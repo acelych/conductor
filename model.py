@@ -8,7 +8,7 @@ from torchvision import models
 
 from .modules._utils import BaseModule
 from .modules.module import ModuleProvider
-from .utils import ResourceManager, ConfigManager, get_module_class_str
+from .utils import ResourceManager, ConfigManager, get_module_class_str, isbuiltin
 
 
 class Model(nn.Module):
@@ -137,7 +137,12 @@ class ModelManager():
             _m.i, _m.f, _m.n = i, f, n
             _m.p = sum(x.numel() for x in _m.parameters())
             _m.t = m.__module__ + '.' + m.__name__
-            _m.args = ' '.join([str(args), str(kwargs)])
+
+            args_desc = [str([(item if isbuiltin(item) else get_module_class_str(item)) for item in args])]
+            if len(kwargs) > 0:
+                args_desc.append(str({k: (v if isbuiltin(v) else get_module_class_str(v)) for k, v in kwargs.items()}))
+            _m.args = ' '.join(args_desc)
+
             layers.append(_m)
             
         return Model(layers, sorted(list(save)))

@@ -31,3 +31,27 @@ class Classifier(BaseModule):
         c1 = channels[former]
         c2 = args[0]
         return c1, c2, [c1] + args, dict()
+    
+
+class ClassifierSimple(BaseModule):
+    def __init__(self, channel_in, num_classes, dropout: float = 0.2):
+        super().__init__()
+        
+        self.norm = nn.BatchNorm2d(channel_in)
+        self.avgpool = nn.AdaptiveAvgPool2d(1)
+        self.classifier = nn.Linear(channel_in, num_classes)
+        
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.avgpool(self.norm(x))
+        x = torch.flatten(x, 1)
+        return self.classifier(x)
+    
+    @staticmethod
+    def yaml_args_parser(channels, former, modules, args) -> Tuple[int, int, list, dict]:
+        '''
+        yaml format:
+        [former, repeats, Classifier, [nc, ...]
+        '''
+        c1 = channels[former]
+        c2 = args[0]
+        return c1, c2, [c1] + args, dict()
