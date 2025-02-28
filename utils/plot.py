@@ -4,6 +4,7 @@ import torch
 import colorsys
 import matplotlib.pyplot as plt
 
+from pathlib import Path
 from torch import Tensor
 from typing import List
 from PIL import Image, ImageDraw, ImageFont
@@ -113,8 +114,8 @@ class Plot:
         canvas_width, canvas_height = cols * width, rows * (height + words_gap)
         
         canvas = Image.new('RGB', (canvas_width, canvas_height), (255, 255, 255))
-        # font = ImageFont.load_default(size=10)
-        font = ImageFont.truetype("arial.ttf", size=15)
+        font = ImageFont.load_default(size=14)
+        # font = ImageFont.truetype("arial.ttf", size=15)
         draw = ImageDraw.Draw(canvas)
         
         for row in range(rows):
@@ -147,13 +148,27 @@ class Plot:
         return Image.open(buf)
 
     @staticmethod
-    def vis_matrix(mat: Tensor, minn: float = None, maxn: float = None):
+    def vis_matrix(mat: Tensor, minn: float = None, maxn: float = None, with_anno: bool = False) -> Image.Image:
         assert len(mat.shape) == 2, f"expect 2D matrix, got dimension {len(mat.shape)}"
         if minn is None or maxn is None:
             maxn, minn = mat.max(), mat.min()
         diff = maxn - minn
         mat_0_255 = ((mat - minn) / diff) * 255
-        return Image.fromarray(mat_0_255.to(dtype=torch.uint8).numpy())
+        img = Image.fromarray(mat_0_255.to(device='cpu', dtype=torch.uint8).numpy())
+        
+        if with_anno:
+            size = (max(img.size[0], 100), img.size[1] + 35)
+            canvas = Image.new('RGB', size, (255, 255, 255))
+            canvas.paste(img, (0, 0))
+            draw = ImageDraw.Draw(canvas)
+            annotation = f"min: {minn:>8.4f}\nmax: {maxn:>8.4f}"
+            font = ImageFont.load_default(size=14)
+            bbox = draw.textbbox((0, 0), text=annotation, font=font, align="left")
+            x = (size[0] - (bbox[2] - bbox[0])) // 2
+            draw.text((x, img.size[1]), text=annotation, font=font, align="left", fill=(0, 0, 0))
+            return canvas
+        else:
+            return img
 
 if __name__ == '__main__':
     import pandas as pd

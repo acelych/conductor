@@ -11,6 +11,7 @@ class ModuleProvider():
         ConvNormAct,
         InvertedResidual,
         HadamardResidual,
+        HadamardResidualV2,
         StarBlock,
         Classifier,
         ClassifierSimple,

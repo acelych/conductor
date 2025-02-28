@@ -1,4 +1,4 @@
-from typing import Tuple, Callable
+from typing import Tuple, Dict
 
 import torch
 from torch import nn, Tensor
@@ -22,6 +22,35 @@ class BaseModule(nn.Module):
     @staticmethod
     def yaml_args_parser(channels, former, modules, args) -> Tuple[int, int, list, dict]:
         raise NotImplementedError
+    
+
+class TensorCollector:
+    _enable: bool = False
+    _collector: Dict[str, Tensor] = dict()
+    
+    @classmethod
+    def enable(cls):
+        cls._enable = True
+        
+    @classmethod
+    def disable(cls):
+        cls._enable = False
+    
+    @classmethod
+    def collect(cls, t: Tensor, key: str):
+        if not cls._enable:
+            return
+        if cls._collector.get(key) is not None:
+            return
+        cls._collector[key] = t
+        
+    @classmethod
+    def get(cls, key) -> Tensor:
+        return cls._collector.get(key)
+        
+    @classmethod
+    def clear(cls):
+        cls._collector.clear()
     
     
 class Functional:

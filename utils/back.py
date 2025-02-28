@@ -7,7 +7,7 @@ from PIL import Image
 import pandas as pd
 
 import torch
-from torch import nn, optim, cuda
+from torch import nn, optim, cuda, Tensor
 
 from .resources import ResourceManager
 from .stat import MetricsManager
@@ -247,6 +247,16 @@ class ArtifactManager:
         filename = f"sample{'_' + category_name if isinstance(category_name, str) else ''}_{stage}.png"
         sample_path = self.taskdir / filename
         Plot.plot_classify_sampling(samples, label, pred, sample_path)
+        
+    def vis_matrices(self, mat: Tensor, info: str, batch: int = 0):
+        if mat is None:
+            return
+        assert len(mat.shape) == 4, f"expect BCHW Tensor, got dimension {len(mat.shape)}"
+        filename = f"visual_{info}_{batch}.png"
+        vis_path = self.taskdir / filename
+        mat_chw = mat[batch, ...]
+        imgs = [Plot.vis_matrix(mat, with_anno=True) for mat in mat_chw]
+        Plot.plot_imgs(vis_path, imgs)
 
 
 def get_default_taskdir_name(output_dir: Path):
