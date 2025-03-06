@@ -61,6 +61,89 @@ class InvertedResidual(BaseModule):
         return c1, c2, [c1] + args[:-1] + [act_type], dict()
     
 
+class UniversalInvertedBottleneck(BaseModule):
+    def __init__(self, c1, c2, ce_ratio, start_k, mid_k, s,
+                 mid_down: bool = True,
+                 use_layer_scale: bool = False,
+                 layer_scale_init_value: float = 1e-5):
+        super().__init__()
+        self.start_dw_kernel_size = start_k
+        self.middle_dw_kernel_size = mid_k
+
+        if start_k:
+           self.start_dw_conv = nn.Conv2d(c1, c1, start_k, 
+                                          s if not mid_down else 1,
+                                          (start_k - 1) // 2,
+                                          groups=c1, bias=False)
+           self.start_dw_norm = nn.BatchNorm2d(c1)
+        
+        expand_channels = self.make_divisible(c1 * ce_ratio, 8)
+        self.expand_conv = nn.Conv2d(c1, expand_channels, 1, 1, bias=False)
+        self.expand_norm = nn.BatchNorm2d(expand_channels)
+        self.expand_act = nn.ReLU(inplace=True)
+
+        if mid_k:
+           self.middle_dw_conv = nn.Conv2d(expand_channels, expand_channels, mid_k,
+                                           s if mid_down else 1,
+                                           (mid_k - 1) // 2,
+                                           groups=expand_channels, bias=False)
+           self.middle_dw_norm = nn.BatchNorm2d(expand_channels)
+           self.middle_dw_act = nn.ReLU(inplace=True)
+        
+        self.proj_conv = nn.Conv2d(expand_channels, c2, 1, 1, bias=False)
+        self.proj_norm = nn.BatchNorm2d(c2)
+
+        if use_layer_scale:
+            self.gamma = nn.Parameter(layer_scale_init_value * torch.ones((c2)), requires_grad=True)
+
+        self.use_layer_scale = use_layer_scale
+        self.identity = s == 1 and c1 == c2
+
+    def forward(self, x):
+        shortcut = x
+
+        if self.start_dw_kernel_size:
+            x = self.start_dw_conv(x)
+            x = self.start_dw_norm(x)
+
+        x = self.expand_conv(x)
+        x = self.expand_norm(x)
+        x = self.expand_act(x)
+
+        if self.middle_dw_kernel_size:
+            x = self.middle_dw_conv(x)
+            x = self.middle_dw_norm(x)
+            x = self.middle_dw_act(x)
+
+        x = self.proj_conv(x)
+        x = self.proj_norm(x)
+
+        if self.use_layer_scale:
+            x = self.gamma * x
+
+        return x + shortcut if self.identity else x
+    
+    @staticmethod
+    def make_divisible(value, divisor, min_value=None, round_down_protect=True):
+        if min_value is None:
+            min_value = divisor
+        new_value = max(min_value, int(value + divisor / 2) // divisor * divisor)
+        # Make sure that round down does not go down by more than 10%.
+        if round_down_protect and new_value < 0.9 * value:
+            new_value += divisor
+        return new_value
+    
+    @staticmethod
+    def yaml_args_parser(channels, former, modules, args) -> Tuple[int, int, list, dict]:
+        '''
+        yaml format:
+        [former, repeats, InvertedResidual, [c2, ce_ratio, start_k, mid_k, s, *]]
+        '''
+        c1 = channels[former]
+        c2 = args[0]
+        return c1, c2, [c1] + args, dict()
+    
+
 class HadamardExpansion(nn.Module):
     def __init__(self, c1, ce):
         super().__init__()
@@ -220,8 +303,12 @@ class HadamardExpansionV2(nn.Module):
         self.norm_x = nn.BatchNorm2d(c1)
         
         # eva-net
-        self.eva_avg = nn.AdaptiveAvgPool2d(1)
-        self.eva_net = nn.Linear(c1, c1)
+        self.eva_net = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Conv2d(c1, c1 // 4, 1),
+            nn.ReLU6(inplace=True),
+            nn.Conv2d(c1 // 4, c1, 1),
+        )
 
         # gumbel-softmax
         self.tau = nn.Parameter(torch.tensor(1.8))
@@ -253,13 +340,13 @@ class HadamardExpansionV2(nn.Module):
         return torch.cat([x, x_sel_ex], dim=1)
         
     def _get_selected(self, x: Tensor) -> Tensor:
-        logits = self.eva_net(self.eva_avg(x).flatten(1))
+        logits = self.eva_net(x).flatten(1)
         if self.training:
             _shape = list(x.shape)
             _shape[1] = -1
             
             mask = nn.functional.gumbel_softmax(logits, tau=self.tau)
-            self._adjust_tau_with_grad(self.eva_net.weight.grad)
+            self._adjust_tau_with_grad(self.eva_net[-1].weight.grad)
             _, topk_idx = torch.topk(mask, self.cs)
             _batchs = torch.arange(_shape[0]).unsqueeze(-1).expand_as(topk_idx).flatten(0)
             _rows = torch.arange(self.cs).unsqueeze(0).expand_as(topk_idx).flatten(0)

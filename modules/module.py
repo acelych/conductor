@@ -10,6 +10,7 @@ class ModuleProvider():
     _modules = [
         ConvNormAct,
         InvertedResidual,
+        UniversalInvertedBottleneck,
         HadamardResidual,
         HadamardResidualV2,
         StarBlock,
