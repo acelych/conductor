@@ -428,8 +428,8 @@ class GhostModule(nn.Module):
 
         c_init = math.ceil(ce / ratio)
         c_new = c_init * (ratio - 1)
-        self.primary_conv = ConvNormAct(c1, c_init, k_p, 1, norm=nn.BatchNorm2d, act=nn.ReLU)
-        self.cheap_operation = ConvNormAct(c_init, c_new, k_c, 1, norm=nn.BatchNorm2d, act=nn.ReLU)
+        self.primary_conv = ConvNormAct(c1, c_init, k_p, 1, norm=nn.BatchNorm2d, act=nn.Hardswish)
+        self.cheap_operation = ConvNormAct(c_init, c_new, k_c, 1, g=c_init, norm=nn.BatchNorm2d, act=None)
 
     def forward(self, x: Tensor) -> Tensor:
         x1 = self.primary_conv(x)
@@ -460,7 +460,7 @@ class AdaptiveBottleneck(BaseModule):
 
         # depthwise conv
         k = 2 if s == 2 else k
-        dw_layer = ConvNormAct(ce, ce, k=k, s=s, g=ce, norm=nn.BatchNorm2d, act=nn.ReLU)
+        dw_layer = ConvNormAct(ce, ce, k=k, s=s, g=ce, norm=nn.BatchNorm2d, act=nn.Hardswish)
         layers.append(dw_layer)
 
         # project layer
