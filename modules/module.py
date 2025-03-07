@@ -13,6 +13,7 @@ class ModuleProvider():
         UniversalInvertedBottleneck,
         HadamardResidual,
         HadamardResidualV2,
+        AdaptiveBottleneck,
         StarBlock,
         Classifier,
         ClassifierSimple,

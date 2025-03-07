@@ -1,8 +1,9 @@
 # example of instruction yaml
 
 # basics
-model_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/utils/resources/example/mobilenetv4_m.yaml
+# model_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/utils/resources/example/mobilenetv4_m.yaml
 # model_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/utils/resources/example/hadamard.yaml
+model_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/utils/resources/example/hadaptivenet_s.yaml
 # model_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/utils/resources/example/mobilenetv3_small.yaml
 # model_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/utils/resources/example/starnet.yaml
 # model_yaml_path: mobilenet_v3_small,{'num_classes':100}

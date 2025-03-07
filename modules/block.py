@@ -1,4 +1,5 @@
-from typing import List, Tuple
+from typing import List, Tuple, Union
+import math
 
 import torch
 from torch import nn, Tensor
@@ -289,7 +290,7 @@ class HadamardResidual(BaseModule):
         return c1, c2, [c1] + args[:-1] + [act_type], dict()
             
             
-class HadamardExpansionV2(nn.Module):
+class AdaptiveCrossHadamard(nn.Module):
     def __init__(self, c1, cs):
         super().__init__()
 
@@ -384,7 +385,7 @@ class HadamardResidualV2(BaseModule):
         layers: List[nn.Module] = []
 
         # hadamard-expansion
-        he_layer = HadamardExpansionV2(c1, cs)
+        he_layer = AdaptiveCrossHadamard(c1, cs)
         ce = he_layer.ce
         layers.append(he_layer)
         
@@ -419,6 +420,70 @@ class HadamardResidualV2(BaseModule):
         c2 = args[0]
         act_type = _convert_str2class(args[-1], modules)  # get act
         return c1, c2, [c1] + args[:-1] + [act_type], dict()
+    
+
+class GhostModule(nn.Module):
+    def __init__(self, c1, ce, ratio=2, k_p=1, k_c=3):
+        super().__init__()
+
+        c_init = math.ceil(ce / ratio)
+        c_new = c_init * (ratio - 1)
+        self.primary_conv = ConvNormAct(c1, c_init, k_p, 1, norm=nn.BatchNorm2d, act=nn.ReLU)
+        self.cheap_operation = ConvNormAct(c_init, c_new, k_c, 1, norm=nn.BatchNorm2d, act=nn.ReLU)
+
+    def forward(self, x: Tensor) -> Tensor:
+        x1 = self.primary_conv(x)
+        x2 = self.cheap_operation(x1)
+        return torch.cat([x1, x2], dim=1)
+    
+
+class AdaptiveBottleneck(BaseModule):
+    def __init__(self, c1, c2, method: str, exp: Union[float, int], k, s):
+        super().__init__()
+
+        assert 1 <= s <= 2, f"illegal stride value '{s}'"
+        self.use_res_connect = s == 1 and c1 == c2
+        layers: List[nn.Module] = []
+
+        # expand layer
+        if method in ['Hada']:
+            assert isinstance(exp, int)
+            ex_layer = AdaptiveCrossHadamard(c1, exp)
+            ce = ex_layer.ce
+        elif method in ['Ghost']:
+            assert isinstance(exp, float)
+            ce = int(c1 * exp)
+            ex_layer = GhostModule(c1, ce)
+        else:
+            raise NotImplementedError
+        layers.append(ex_layer)
+
+        # depthwise conv
+        k = 2 if s == 2 else k
+        dw_layer = ConvNormAct(ce, ce, k=k, s=s, g=ce, norm=nn.BatchNorm2d, act=nn.ReLU)
+        layers.append(dw_layer)
+
+        # project layer
+        pj_layer = ConvNormAct(ce, c2, k=1, norm=nn.BatchNorm2d, act=None)
+        layers.append(pj_layer)
+        
+        self.block = nn.Sequential(*layers)
+        
+    def forward(self, x: Tensor) -> Tensor:
+        res = self.block(x)
+        if self.use_res_connect:
+            res = x + res
+        return res
+    
+    @staticmethod
+    def yaml_args_parser(channels, former, modules, args) -> Tuple[int, int, list, dict]:
+        '''
+        yaml format:
+        [former, repeats, AdaptiveBottleneck, [c2, method, exp, k, s]]
+        '''
+        c1 = channels[former]
+        c2 = args[0]
+        return c1, c2, [c1] + args, dict()
 
 
 class StarBlock(BaseModule):
