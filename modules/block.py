@@ -493,7 +493,7 @@ class StarBlock(BaseModule):
         self.f1 = ConvNormAct(dim, mlp_ratio * dim, 1, norm=None, act=None)
         self.f2 = ConvNormAct(dim, mlp_ratio * dim, 1, norm=None, act=None)
         self.g = ConvNormAct(mlp_ratio * dim, dim, 1, norm=nn.BatchNorm2d, act=None)
-        self.dwconv2 = ConvNormAct(dim, dim, 7, 1, (7 - 1) // 2, g=dim, norm=nn.BatchNorm2d, act=None)
+        self.dwconv2 = ConvNormAct(dim, dim, 7, 1, (7 - 1) // 2, g=dim, norm=None, act=None)
         self.act = nn.ReLU6()
 
     def forward(self, x):
