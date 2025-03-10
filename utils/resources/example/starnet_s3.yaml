@@ -1,0 +1,19 @@
+nc: &nc 100
+mlp_ratio: &mlp_ratio 4
+task: classify
+backbone:
+  - [-1, 1, ConvNormAct, [[32, 3, 2], BatchNorm2d, ReLU6]]  # [[c2, k, ...], BatchNorm2d, Hardswish]
+  # stage 1
+  - [-1, 1, ConvNormAct, [[32, 3, 2], BatchNorm2d, null]]  # embed_dim = base_dim * (2 ^ 0)
+  - [-1, 2, StarBlock, [32, *mlp_ratio]]  # [dim, ratio]
+  # stage 2
+  - [-1, 1, ConvNormAct, [[64, 3, 2], BatchNorm2d, null]]  # embed_dim = base_dim * (2 ^ 1)
+  - [-1, 2, StarBlock, [64, *mlp_ratio]]  # [dim, ratio]
+  # stage 3
+  - [-1, 1, ConvNormAct, [[128, 3, 2], BatchNorm2d, null]]  # embed_dim = base_dim * (2 ^ 2)
+  - [-1, 8, StarBlock, [128, *mlp_ratio]]  # [dim, ratio]
+  # stage 4
+  - [-1, 1, ConvNormAct, [[256, 3, 2], BatchNorm2d, null]]  # embed_dim = base_dim * (2 ^ 3)
+  - [-1, 4, StarBlock, [256, *mlp_ratio]]  # [dim, ratio]
+head:
+  - [-1, 1, ClassifierSimple, [*nc, 0.3]]

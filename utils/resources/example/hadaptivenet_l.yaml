@@ -1,0 +1,35 @@
+nc: &nc 100
+task: classify
+backbone:
+  # stem
+  - [-1, 1, ConvNormAct, [[24, 2, 2], BatchNorm2d, null]]  # [[c2, k, s, ...], BatchNorm2d, ReLU]
+  # stage 1
+  - [-1, 1, ConvNormAct, [[96, 2, 2], BatchNorm2d, Hardswish]]
+  - [-1, 1, ConvNormAct, [[48, 1, 1], BatchNorm2d, Hardswish]]
+  # stage 2
+  - [-1, 1, AdaptiveBottleneck, [96, Ghost, 4.0, 2, 2]]  # [c2, method, exp, k, s]
+  - [-1, 1, AdaptiveBottleneck, [96, Ghost, 4.0, 3, 1]]
+  # stage 3
+  - [-1, 1, AdaptiveBottleneck, [192, Ghost, 4.0, 2, 2]]
+  - [-1, 1, AdaptiveBottleneck, [192, Hada, 32, 5, 1]]  # cs: 32, cs_ex: 496, ce: 688 (*3.6)
+  - [-1, 1, AdaptiveBottleneck, [192, Hada, 32, 5, 1]]
+  - [-1, 1, AdaptiveBottleneck, [192, Ghost, 4.0, 5, 1]]
+  - [-1, 1, AdaptiveBottleneck, [192, Hada, 32, 5, 1]]
+  - [-1, 1, AdaptiveBottleneck, [192, Hada, 32, 5, 1]]
+  - [-1, 1, AdaptiveBottleneck, [192, Ghost, 4.0, 5, 1]]
+  - [-1, 1, AdaptiveBottleneck, [192, Hada, 32, 5, 1]]
+  - [-1, 1, AdaptiveBottleneck, [192, Hada, 32, 5, 1]]
+  - [-1, 1, AdaptiveBottleneck, [192, Ghost, 4.0, 5, 1]]
+  - [-1, 1, AdaptiveBottleneck, [192, Hada, 32, 5, 1]]
+  - [-1, 1, AdaptiveBottleneck, [192, Hada, 32, 5, 1]]
+  # stage 4
+  - [-1, 1, AdaptiveBottleneck, [256, Ghost, 4.0, 2, 2]]
+  - [-1, 1, AdaptiveBottleneck, [256, Hada, 36, 7, 1]]  # cs: 40, cs_ex: 780, ce: 1036 (*4)
+  - [-1, 1, AdaptiveBottleneck, [256, Hada, 36, 7, 1]]
+  - [-1, 1, AdaptiveBottleneck, [256, Ghost, 4.0, 2, 2]]
+  - [-1, 1, AdaptiveBottleneck, [256, Hada, 36, 7, 1]]
+  - [-1, 1, AdaptiveBottleneck, [256, Hada, 36, 7, 1]]
+  - [-1, 1, ConvNormAct, [[960, 1, 1], BatchNorm2d, Hardswish]]
+
+head:
+  - [-1, 1, Classifier, [*nc, 1280, 0.3]]
