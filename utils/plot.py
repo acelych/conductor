@@ -87,7 +87,10 @@ class Plot:
         canvas_width, canvas_height = cols * width, rows * (height + words_gap)
         
         canvas = Image.new('RGB', (canvas_width, canvas_height), (255, 255, 255))
-        font = ImageFont.load_default(size=10)
+        try:
+            font = ImageFont.load_default(size=10)
+        except TypeError:
+            font = ImageFont.load_default()
         draw = ImageDraw.Draw(canvas)
         
         for row in range(rows):
