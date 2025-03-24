@@ -6,7 +6,7 @@ from torch import nn, Tensor
 from torchvision.ops import SqueezeExcitation as SElayer
 
 from .conv import ConvNormAct, MeanFilter
-from .misc import CrossHadaNorm
+from .misc import CrossHadaNorm, DyT
 from ._utils import _convert_str2class, BaseModule, TensorCollector
 
 class InvertedResidual(BaseModule):
@@ -328,15 +328,19 @@ class AdaptiveCrossHadamard(nn.Module):
                 h_idx += 1
 
         # expand normalize
-        self.norm = CrossHadaNorm(self.cs_expand)
+        # self.norm = CrossHadaNorm(self.cs_expand)
+        # self.norm = nn.BatchNorm2d(self.cs_expand)
+        self.norm = DyT(self.cs_expand)
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.fc(x)
         x = self.norm_x(x)
         
-        x_sel = self._get_selected(x)
+        x_sel, topk_idx = self._get_selected(x)
         x_sel_ex = x_sel[:, self.hadamard_i, ...] * x_sel[:, self.hadamard_j, ...]
-        x_sel_ex = self.norm(x_sel_ex, self.norm_x, self.hadamard_i, self.hadamard_j)
+        # xse_mean = x_sel_ex.mean(dim=(0,2,3),keepdim=True)
+        x_sel_ex = self.norm(x_sel_ex)
+        # x_sel_ex = self.norm(x_sel_ex, self.norm_x, topk_idx, self.hadamard_i, self.hadamard_j)
 
         return torch.cat([x, x_sel_ex], dim=1)
         
@@ -366,7 +370,7 @@ class AdaptiveCrossHadamard(nn.Module):
             _, topk_idx = torch.topk(logits, self.cs)
             batch_idx = torch.arange(x.size(0)).unsqueeze(-1).expand_as(topk_idx)
             x_selected = x[batch_idx, topk_idx]
-        return x_selected        
+        return x_selected, topk_idx
 
     def _adjust_tau_with_grad(self, grad: Tensor, alpha: float = 0.01):
         if self.tau_adj.data != 0 and grad is not None:
