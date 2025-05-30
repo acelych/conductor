@@ -37,6 +37,44 @@ class RMSNorm(nn.Module):
         return self.gamma * x_normed + self.beta
     
     
+class DySig(nn.Module):
+    def __init__(self, dim, alpha_init_value=0.35):
+        super().__init__()
+        self.alpha = nn.Parameter(torch.ones(1) * alpha_init_value)
+        self.weight = nn.Parameter(torch.ones(1, dim, 1, 1) * 2)
+        self.beta = nn.Parameter(torch.zeros(1, dim, 1, 1))
+
+    def forward(self, x: Tensor) -> Tensor:
+        x = torch.sigmoid(self.alpha * x) - 0.5
+        return self.weight * x + self.beta
+    
+    
+class DySoft(nn.Module):
+    def __init__(self, dim, alpha_init_value=0.5):
+        super().__init__()
+        self.alpha = nn.Parameter(torch.ones(1) * alpha_init_value)
+        self.weight = nn.Parameter(torch.ones(1, dim, 1, 1))
+        self.bias = nn.Parameter(torch.zeros(1, dim, 1, 1))
+        
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.alpha * x
+        x = x / (1 + torch.abs(x))
+        return x * self.weight + self.bias
+    
+    
+class DyAlge(nn.Module):
+    def __init__(self, dim, alpha_init_value=0.5):
+        super().__init__()
+        self.alpha = nn.Parameter(torch.ones(1) * alpha_init_value)
+        self.weight = nn.Parameter(torch.ones(1, dim, 1, 1))
+        self.bias = nn.Parameter(torch.zeros(1, dim, 1, 1))
+        
+    def forward(self, x: Tensor) -> Tensor:
+        x = self.alpha * x
+        x = x / torch.sqrt(1 + x * x)
+        return x * self.weight + self.bias
+    
+    
 class DyT(nn.Module):
     # Dynamic Tanh, cite: https://arxiv.org/abs/2503.10622
     def __init__(self, num_features, alpha_init_value=0.5):

@@ -12,14 +12,15 @@ backbone:
   # stage 3
   - [-1, 1, AdaptiveBottleneck, [96, Ghost, 4.0, 2, 2]]
   - [-1, 1, AdaptiveBottleneck, [96, Hada, 16, 5, 1]]  # cs: 16, cs_ex: 120, ce: 216
-  - [-1, 1, AdaptiveBottleneck, [96, Hada, 16, 5, 1]]
+  - [-1, 1, AdaptiveBottleneck, [96, Hada, 16, 5, 1, "DyAlge"]]
+  # - [-1, 1, AdaptiveBottleneck, [96, Hada, 16, 5, 1]]
   - [-1, 1, AdaptiveBottleneck, [96, Ghost, 2.0, 5, 1]]
   - [-1, 1, AdaptiveBottleneck, [96, Hada, 16, 5, 1]]
-  - [-1, 1, AdaptiveBottleneck, [96, Hada, 16, 5, 1]]
+  - [-1, 1, AdaptiveBottleneck, [96, Hada, 16, 5, 1, "DyAlge"]]
   # stage 4
   - [-1, 1, AdaptiveBottleneck, [128, Ghost, 6.0, 2, 2]]
   - [-1, 1, AdaptiveBottleneck, [128, Hada, 32, 7, 1]]  # cs: 32, cs_ex: 496, ce: 624
-  - [-1, 1, AdaptiveBottleneck, [128, Hada, 32, 7, 1]]
+  - [-1, 1, AdaptiveBottleneck, [128, Hada, 32, 7, 1, "DyAlge"]]
   - [-1, 1, ConvNormAct, [[960, 1, 1], BatchNorm2d, Hardswish]]
 
 head:

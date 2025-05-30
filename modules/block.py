@@ -6,7 +6,7 @@ from torch import nn, Tensor
 from torchvision.ops import SqueezeExcitation as SElayer
 
 from .conv import ConvNormAct, MeanFilter
-from .misc import CrossHadaNorm, DyT
+from .misc import CrossHadaNorm, RMSNorm, DyT, DySig, DySoft, DyAlge
 from ._utils import _convert_str2class, BaseModule, TensorCollector
 
 class InvertedResidual(BaseModule):
@@ -291,7 +291,7 @@ class HadamardResidual(BaseModule):
             
             
 class AdaptiveCrossHadamard(nn.Module):
-    def __init__(self, c1, cs):
+    def __init__(self, c1, cs, norm: nn.Module):
         super().__init__()
 
         self.c1 = c1
@@ -330,7 +330,9 @@ class AdaptiveCrossHadamard(nn.Module):
         # expand normalize
         # self.norm = CrossHadaNorm(self.cs_expand)
         # self.norm = nn.BatchNorm2d(self.cs_expand)
-        self.norm = DyT(self.cs_expand)
+        # self.norm = DyT(self.cs_expand)
+        # self.norm = RMSNorm(self.cs_expand)
+        self.norm = norm(self.cs_expand)
 
     def forward(self, x: Tensor) -> Tensor:
         x = self.fc(x)
@@ -442,7 +444,7 @@ class GhostModule(nn.Module):
     
 
 class AdaptiveBottleneck(BaseModule):
-    def __init__(self, c1, c2, method: str, exp: Union[float, int], k, s):
+    def __init__(self, c1, c2, method: str, exp: Union[float, int], k, s, norm: str = "BN"):
         super().__init__()
 
         assert 1 <= s <= 2, f"illegal stride value '{s}'"
@@ -452,7 +454,17 @@ class AdaptiveBottleneck(BaseModule):
         # expand layer
         if method in ['Hada']:
             assert isinstance(exp, int)
-            ex_layer = AdaptiveCrossHadamard(c1, exp)
+            if norm == "BN":
+                norm = nn.BatchNorm2d
+            elif norm == "DySig":
+                norm = DySig
+            elif norm == "DySoft":
+                norm = DySoft
+            elif norm == "DyAlge":
+                norm = DyAlge
+            else:
+                norm = nn.Identity
+            ex_layer = AdaptiveCrossHadamard(c1, exp, norm)
             ce = ex_layer.ce
         elif method in ['Ghost']:
             assert isinstance(exp, float)
