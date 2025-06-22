@@ -6,7 +6,7 @@ from torch import nn, Tensor
 from torchvision.ops import SqueezeExcitation as SElayer
 
 from .conv import ConvNormAct, MeanFilter
-from .misc import CrossHadaNorm, RMSNorm, DyT, DySig, DySoft, DyAlge
+from .misc import CrossHadaNorm, RMSNorm, DyT, DySig, DySoft, DyAlge, ECA
 from ._utils import _convert_str2class, BaseModule, TensorCollector
 
 class InvertedResidual(BaseModule):
@@ -304,12 +304,13 @@ class AdaptiveCrossHadamard(nn.Module):
         self.norm_x = nn.BatchNorm2d(c1)
         
         # eva-net
-        self.eva_net = nn.Sequential(
-            nn.AdaptiveAvgPool2d(1),
-            nn.Conv2d(c1, c1 // 4, 1),
-            nn.ReLU6(inplace=True),
-            nn.Conv2d(c1 // 4, c1, 1),
-        )
+        # self.eva_net = nn.Sequential(
+        #     nn.AdaptiveAvgPool2d(1),
+        #     nn.Conv2d(c1, c1 // 4, 1),
+        #     nn.ReLU6(inplace=True),
+        #     nn.Conv2d(c1 // 4, c1, 1),
+        # )
+        self.eva_net = ECA(5, True)
 
         # gumbel-softmax
         self.tau = nn.Parameter(torch.tensor(1.8))

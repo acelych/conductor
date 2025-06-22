@@ -8,6 +8,7 @@ from .model import ModelManager
 from .data import DataLoaderManager
 from .train import TrainerManager
 from .test import Tester
+from .profiler import Profiler
 from .utils import ConfigManager, ArtifactManager, LogInterface, MetricsManager
 
 
@@ -34,7 +35,14 @@ class Conductor:
         elif self.cm.command == 'test':
             orch = Tester(self.cm, self.am, self.log)
             orch.test()
-        elif self.cm.command == 'benchmark':
+        elif self.cm.command == 'profile':
+            orch = Profiler(self.cm, self.am, self.log)
+            if (self.cm.device != 'cuda'):
+                self.log.info("Profiler only supports CUDA device, exiting...")
+                return
+            orch.profile()
+        else:
+            self.log.info(f"Unknown command: {self.cm.command}, exiting...")
             pass
         
 

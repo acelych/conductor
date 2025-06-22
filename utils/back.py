@@ -14,12 +14,15 @@ from .stat import MetricsManager
 from .misc import LR_Scheduler, get_module_class_str, isbuiltin
 from .plot import Plot
 
+"""
+ConfigManager is a utility class to manage configurations for training, testing, and profiling tasks.
+"""
 class ConfigManager:
     def __init__(
         self,
         model_yaml_path: str,
         data_yaml_path: str,
-        command: str,  # train, predict
+        command: str,  # train, test, profile
         task: str,
         device: str,  # cpu, cuda
         world: list = None,  # giving [...] of devices of using cuda
@@ -115,10 +118,46 @@ class ConfigManager:
     
     @classmethod
     def get_instance(cls, **kwargs) -> Tuple[Any, list]:
+        '''
+        Get an instance of ConfigManager with validated and processed configurations.
+        `get_instance` will validate the provided configurations from YAML, set default values where necessary,
+        and return an instance of ConfigManager along with a list of info messages.
+
+        Args:
+            **kwargs: Keyword arguments containing configuration parameters. Expected keys include:
+                - model_yaml_path (str): Path to the model YAML file.
+                - data_yaml_path (str): Path to the data YAML file.
+                - command (str): Command to execute ('train', 'test', 'profiler').
+                - task (str): Task type (e.g., 'classification', 'detection').
+                - device (str): Device to use ('cpu' or 'cuda').
+                - world (list, optional): List of device indices for distributed training.
+                - criterion (str, optional): Loss function class name.
+                - optimizer (str, optional): Optimizer class name.
+                - scheduler (str, optional): Learning rate scheduler class name.
+                - learn_rate (float, optional): Learning rate for the optimizer.
+                - warmup_rate (float, optional): Warmup rate for learning rate scheduling.
+                - momentum (float, optional): Momentum for the optimizer.
+                - decay (float, optional): Weight decay for the optimizer.
+                - batch_size (int, optional): Batch size for training.
+                - epochs (int, optional): Number of epochs for training.
+                - imgsz (Union[int, tuple], optional): Input image size for the model.
+                - best_metrics (str, optional): Metric to determine the best model.
+
+        Returns:
+            - ConfigManager, list: An instance of ConfigManager and a list of info messages. (since logging is not implemented yet)
+        '''
         import ast
 
         model_yaml_path = kwargs.get('model_yaml_path')
         info = []
+
+        # data_yaml_path
+        data_yaml_path = kwargs.get('data_yaml_path')
+        if not data_yaml_path:
+            if kwargs.get('command') != 'profile':
+                raise AssertionError("expect 'data_yaml_path' for training or testing")
+            else:
+                kwargs['data_yaml_path'] = ''
         
         # task
         task = kwargs.get('task')
@@ -201,6 +240,9 @@ class ConfigManager:
         return int(self.epochs * self.warmup_rate)
     
 
+"""
+ArtifactManager is used to manage the artifacts generated during the training or testing process.
+"""
 class ArtifactManager:
     def __init__(self, cm: ConfigManager):
         self.cm = cm
@@ -216,10 +258,12 @@ class ArtifactManager:
         # Path
         self.console_logger_path = self.taskdir / 'console.log'
         self.metrics_logger_path = self.taskdir / 'metrics.csv'
+        self.onnx_model_path = self.taskdir / 'model.onnx'
         self.weights_dir = self.taskdir / 'weights'
         self.best = self.weights_dir / 'best.pt'
         self.last = self.weights_dir / 'last.pt'
         self.result = self.taskdir / 'result.png'
+        self.profiler_dir = self.taskdir / 'profiler'
 
         # File
         ckpt = getattr(cm, 'ckpt')
@@ -231,6 +275,8 @@ class ArtifactManager:
             self.weights_dir.mkdir()  # prepare dir for trained weights
             metrics_heads = MetricsManager.get_metrics_holder(cm.task).get_heads()
             pd.DataFrame({k: [] for k in metrics_heads}).to_csv(self.metrics_logger_path, index=False)  # init indexes logger
+        elif cm.command == 'profile':
+            self.profiler_dir.mkdir()  # prepare dir for profiler results
 
     def info(self, content: str):
         with open(self.console_logger_path, 'a') as f:

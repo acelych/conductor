@@ -87,4 +87,48 @@ class DyT(nn.Module):
         x = torch.tanh(self.alpha * x)
         return x * self.weight + self.bias
 
+
+class ECA(nn.Module):
+    """Constructs a ECA module.
+    Args:
+        k_size: Adaptive selection of kernel size
+        weights_only: If True, returns the weights only without applying sigmoid activation.
+    """
+    def __init__(self, k_size=3, weights_only=False):
+        super(ECA, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.conv = nn.Conv1d(1, 1, kernel_size=k_size, padding=(k_size - 1) // 2, bias=False) 
+        if weights_only:
+            self.forward = self.wo_forw
+        else:
+            self.sigmoid = nn.Sigmoid()
+            self.forward = self.reg_forw
+
+    def reg_forw(self, x: Tensor) -> Tensor:
+        # x: input features with shape [b, c, h, w]
+        b, c, h, w = x.size()
+
+        # feature descriptor on the global spatial information
+        y = self.avg_pool(x)
+
+        # Two different branches of ECA module
+        y = self.conv(y.squeeze(-1).transpose(-1, -2)).transpose(-1, -2).unsqueeze(-1)
+
+        # Apply sigmoid activation
+        y = self.sigmoid(y)
+
+        return y
+    
+    def wo_forw(self, x: Tensor) -> Tensor:
+        # x: input features with shape [b, c, h, w]
+        b, c, h, w = x.size()
+
+        # feature descriptor on the global spatial information
+        y = self.avg_pool(x)
+
+        # Two different branches of ECA module
+        y = self.conv(y.squeeze(-1).transpose(-1, -2)).transpose(-1, -2).unsqueeze(-1)
+
+        # Directly return weights
+        return y
         
