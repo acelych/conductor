@@ -6,8 +6,10 @@ from torch import nn, Tensor
 from torchvision.ops import SqueezeExcitation as SElayer
 
 from .conv import ConvNormAct, MeanFilter
-from .misc import CrossHadaNorm, RMSNorm, DyT, DySig, DySoft, DyAlge, ECA
+from .misc import CrossHadaNorm, RMSNorm, DyT, DySig, DySoft, DyAlge, ECA, MVE
 from ._utils import _convert_str2class, BaseModule, TensorCollector
+
+from .cuda_modules.cdt_extensions import *
 
 class InvertedResidual(BaseModule):
     def __init__(self, c1, c2, ce, k, s, d, se, act):
@@ -311,6 +313,7 @@ class AdaptiveCrossHadamard(nn.Module):
         #     nn.Conv2d(c1 // 4, c1, 1),
         # )
         self.eva_net = ECA(5, True)
+        # self.eva_net = MVE(c1)
 
         # gumbel-softmax
         self.tau = nn.Parameter(torch.tensor(1.8))
@@ -339,11 +342,8 @@ class AdaptiveCrossHadamard(nn.Module):
         x = self.fc(x)
         x = self.norm_x(x)
         
-        x_sel, topk_idx = self._get_selected(x)
-        x_sel_ex = x_sel[:, self.hadamard_i, ...] * x_sel[:, self.hadamard_j, ...]
-        # xse_mean = x_sel_ex.mean(dim=(0,2,3),keepdim=True)
+        x_sel_ex = self._get_selected(x)
         x_sel_ex = self.norm(x_sel_ex)
-        # x_sel_ex = self.norm(x_sel_ex, self.norm_x, topk_idx, self.hadamard_i, self.hadamard_j)
 
         return torch.cat([x, x_sel_ex], dim=1)
         
@@ -354,7 +354,9 @@ class AdaptiveCrossHadamard(nn.Module):
             _shape[1] = -1
             
             mask = nn.functional.gumbel_softmax(logits, tau=self.tau)
-            self._adjust_tau_with_grad(self.eva_net[-1].weight.grad)
+            # self._adjust_tau_with_grad(self.eva_net[-1].weight.grad) # 提取多层网络梯度
+            self._adjust_tau_with_grad(self.eva_net.conv.weight.grad) # 提取单层网络梯度
+            # self._adjust_tau_with_grad(self.fc.weight.grad) # 提取入射网络梯度
             _, topk_idx = torch.topk(mask, self.cs)
             _batchs = torch.arange(_shape[0]).unsqueeze(-1).expand_as(topk_idx).flatten(0)
             _rows = torch.arange(self.cs).unsqueeze(0).expand_as(topk_idx).flatten(0)
@@ -368,12 +370,17 @@ class AdaptiveCrossHadamard(nn.Module):
             mask_mat_[_batchs, _rows, topk_idx.flatten(0)] = 1.0
             mask_mat = mask_mat_ * hard_mask.unsqueeze(1)
             
-            x_selected = (mask_mat @ x.flatten(2)).view(_shape)
+            x_sel = (mask_mat @ x.flatten(2)).view(_shape)
+            x_sel_ex = x_sel[:, self.hadamard_i, ...] * x_sel[:, self.hadamard_j, ...]
         else:
-            _, topk_idx = torch.topk(logits, self.cs)
-            batch_idx = torch.arange(x.size(0)).unsqueeze(-1).expand_as(topk_idx)
-            x_selected = x[batch_idx, topk_idx]
-        return x_selected, topk_idx
+            if 'cross_hada_mixed' in globals():
+                x_sel_ex = cross_hada_mixed(x, logits, self.cs)
+            else:
+                _, topk_idx = torch.topk(logits, self.cs)
+                batch_idx = torch.arange(x.size(0)).unsqueeze(-1).expand_as(topk_idx)
+                x_sel = x[batch_idx, topk_idx]
+                x_sel_ex = x_sel[:, self.hadamard_i, ...] * x_sel[:, self.hadamard_j, ...]
+        return x_sel_ex
 
     def _adjust_tau_with_grad(self, grad: Tensor, alpha: float = 0.01):
         if self.tau_adj.data != 0 and grad is not None:

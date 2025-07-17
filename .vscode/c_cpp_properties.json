@@ -5,8 +5,10 @@
             "includePath": [
                 "${workspaceFolder}/**",
                 "/usr/include/",
-                "/opt/conda/envs/py39/lib/python3.9/site-packages/torch/include",
-                "/opt/conda/envs/py39/lib/python3.9/site-packages/torch/include/torch/csrc/api/include"
+                "/usr/include/python3.10/",
+                "/usr/local/cuda/include/",
+                "/opt/conda/lib/python3.10/site-packages/torch/include",
+                "/opt/conda/lib/python3.10/site-packages/torch/include/torch/csrc/api/include"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",

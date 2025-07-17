@@ -1,0 +1,13 @@
+{
+    "C_Cpp.formatting": "clangFormat",
+    "editor.formatOnSave": true,
+    "files.associations": {
+        "cmath": "cpp",
+        "complex": "cpp",
+        "valarray": "cpp",
+        "random": "cpp",
+        "list": "cpp",
+        "algorithm": "cpp",
+        "forward_list": "cpp"
+    }
+}

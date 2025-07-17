@@ -131,4 +131,19 @@ class ECA(nn.Module):
 
         # Directly return weights
         return y
+    
+class MVE(nn.Module):
+    """Constructs a Mean-Var Estimator (MVE) module.
+    
+    """
+    def __init__(self, channels, alpha=1.0, beta=0.5):
+        super(MVE, self).__init__()
+        self.alpha = nn.Parameter(torch.full((1, channels, 1, 1), alpha))
+        # self.beta = nn.Parameter(torch.full((1, channels, 1, 1), beta))
         
+    def forward(self, x: Tensor) -> Tensor:
+        B, C, H, W = x.shape
+        x_flat = x.view(B, C, -1)
+        mean = x_flat.mean(dim=2, keepdim=True).view(B, C, 1, 1)
+        # var = x_flat.var(dim=2, keepdim=True).view(B, C, 1, 1)
+        return self.alpha * mean

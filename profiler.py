@@ -32,7 +32,7 @@ class Profiler:
         # --------------------------
         # Step 1: PyTorch Profiling
         # --------------------------
-        sches = [1, 1, 3]
+        sches = [1, 5, 5]
         with profiler.profile(
             activities=[
                 profiler.ProfilerActivity.CPU,
@@ -65,7 +65,7 @@ class Profiler:
             data,
             onnx_path,
             export_params=True,
-            opset_version=13,
+            opset_version=18,
             do_constant_folding=True,
             input_names=['input'],
             output_names=['output'],
