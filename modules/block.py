@@ -12,8 +12,8 @@ from ._utils import _convert_str2class, BaseModule, TensorCollector
 from .cuda_modules.cdt_extensions import *
 
 class InvertedResidual(BaseModule):
-    def __init__(self, c1, c2, ce, k, s, d, se, act):
-        super().__init__()
+    def __init__(self, c1, c2, ce, k, s, d, se, act, **kwargs):
+        super().__init__(**kwargs)
         
         assert 1 <= s <= 2, f"illegal stride value '{s}'"
         self.use_res_connect = s == 1 and c1 == c2
@@ -68,8 +68,9 @@ class UniversalInvertedBottleneck(BaseModule):
     def __init__(self, c1, c2, ce_ratio, start_k, mid_k, s,
                  mid_down: bool = True,
                  use_layer_scale: bool = False,
-                 layer_scale_init_value: float = 1e-5):
-        super().__init__()
+                 layer_scale_init_value: float = 1e-5, 
+                 **kwargs):
+        super().__init__(**kwargs)
         self.start_dw_kernel_size = start_k
         self.middle_dw_kernel_size = mid_k
 
@@ -243,8 +244,8 @@ class HadamardExpansion(nn.Module):
 
 
 class HadamardResidual(BaseModule):
-    def __init__(self, c1, c2, ce, k, s, d, se, act):
-        super().__init__()
+    def __init__(self, c1, c2, ce, k, s, d, se, act, **kwargs):
+        super().__init__(**kwargs)
         
         assert 1 <= s <= 2, f"illegal stride value '{s}'"
         self.use_res_connect = s == 1 and c1 == c2
@@ -391,8 +392,8 @@ class AdaptiveCrossHadamard(nn.Module):
 
 
 class HadamardResidualV2(BaseModule):
-    def __init__(self, c1, c2, cs, k, s, d, se, act):
-        super().__init__()
+    def __init__(self, c1, c2, cs, k, s, d, se, act, **kwargs):
+        super().__init__(**kwargs)
         
         assert 1 <= s <= 2, f"illegal stride value '{s}'"
         self.use_res_connect = s == 1 and c1 == c2
@@ -452,8 +453,8 @@ class GhostModule(nn.Module):
     
 
 class AdaptiveBottleneck(BaseModule):
-    def __init__(self, c1, c2, method: str, exp: Union[float, int], k, s, norm: str = "BN"):
-        super().__init__()
+    def __init__(self, c1, c2, method: str, exp: Union[float, int], k, s, norm: str = "BN", **kwargs):
+        super().__init__(**kwargs)
 
         assert 1 <= s <= 2, f"illegal stride value '{s}'"
         self.use_res_connect = s == 1 and c1 == c2
@@ -511,8 +512,8 @@ class AdaptiveBottleneck(BaseModule):
 
 
 class StarBlock(BaseModule):
-    def __init__(self, dim, mlp_ratio=3):
-        super().__init__()
+    def __init__(self, dim, mlp_ratio=3, **kwargs):
+        super().__init__(**kwargs)
         self.dwconv = ConvNormAct(dim, dim, 7, 1, (7 - 1) // 2, g=dim, norm=nn.BatchNorm2d, act=None)
         self.f1 = ConvNormAct(dim, mlp_ratio * dim, 1, norm=None, act=None)
         self.f2 = ConvNormAct(dim, mlp_ratio * dim, 1, norm=None, act=None)
@@ -533,7 +534,7 @@ class StarBlock(BaseModule):
     def yaml_args_parser(channels, former, modules, args) -> Tuple[int, int, list, dict]:
         '''
         yaml format:
-        [former, repeats, BaseModule, [dim, ratio]]
+        [former, repeats, StarBlock, [dim, ratio]]
         '''
         c1 = channels[former]
         c2 = args[0]

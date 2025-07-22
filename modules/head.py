@@ -6,9 +6,9 @@ from torch import nn, Tensor
 from ._utils import BaseModule
 
 class Classifier(BaseModule):
-    def __init__(self, channel_in, num_classes, channel_expand, dropout: float = 0.2):
-        super().__init__()
-        
+    def __init__(self, channel_in, num_classes, channel_expand, dropout: float = 0.2, **kwargs):
+        super().__init__(**kwargs)
+
         self.avgpool = nn.AdaptiveAvgPool2d(1)
         self.classifier = nn.Sequential(
             nn.Linear(channel_in, channel_expand),
@@ -34,8 +34,8 @@ class Classifier(BaseModule):
     
 
 class ClassifierSimple(BaseModule):
-    def __init__(self, channel_in, num_classes, dropout: float = 0.2):
-        super().__init__()
+    def __init__(self, channel_in, num_classes, dropout: float = 0.2, **kwargs):
+        super().__init__(**kwargs)
         
         self.norm = nn.BatchNorm2d(channel_in)
         self.avgpool = nn.AdaptiveAvgPool2d(1)

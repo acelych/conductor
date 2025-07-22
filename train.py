@@ -1,3 +1,4 @@
+import random
 from typing import Tuple, Callable
 
 import torch
@@ -8,11 +9,12 @@ from torch.types import Number
 from torch.utils.data import DataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from .model import ModelManager
+from .model import ModelManager, Model
 from .data import DataLoaderManager
 from .utils import ConfigManager, ArtifactManager, MetricsManager, Calculate, Recorder, LogInterface, LR_Scheduler, get_model_assessment
 from .test import Tester
-from .modules._utils import TensorCollector
+from .modules._utils import BaseModule, TensorCollector
+from .modules.nas import TauScheduler
 
 class Trainer(Tester):
     def __init__(self, 
@@ -52,22 +54,46 @@ class Trainer(Tester):
         if self.isactive():
             self.log.info("initializing training")
 
-        train_dataloader = self.data_mng.get_dataloader("train", rank=self.rank)
-        val_dataloader = self.data_mng.get_dataloader("val", rank=self.rank)
-        test_dataleader = self.data_mng.get_dataloader("test", rank=self.rank)
+        train_dataloader = self.data_mng.get_dataloader("train", rank=self.rank, shuffle=True)
+        val_dataloader = self.data_mng.get_dataloader("val", rank=self.rank, shuffle=False)
+        test_dataleader = self.data_mng.get_dataloader("test", rank=self.rank, shuffle=False)
         
         model = self.model_mng.build_model()
         if self.cm.isddp():
             self.model = DDP(model, device_ids=[torch.cuda.current_device()])
         else:
             self.model = model.to(self.cm.device)
+            
+        self.model_params = []
+        self.arch_params = []
+        self.tau_params = []
+        for name, param in self.model.named_parameters():
+            if 'nas_alpha' in name:
+                self.arch_params.append(param)
+            elif 'nas_tau' in name:
+                self.tau_params.append(param)
+            else:
+                self.model_params.append(param)
 
         self.criterion: nn.Module = self.cm.criterion()
-        self.optimizer: optim.Optimizer = self.cm.build_optimizer(self.model)
+        self.optimizer: optim.Optimizer = self.cm.build_optimizer(self.model_params, self.cm.optimizer, self.cm.learn_rate)
         self.scheduler: LR_Scheduler = self.cm.build_scheduler(self.optimizer, len(train_dataloader))
 
         self.recorder: Recorder = Recorder(self.model_mng.model_desc.get("nc"))
         self.best_fitness = None
+        
+        if self.cm.nas:
+            self.nas_optimizer: optim.Optimizer = self.cm.build_optimizer(
+                self.arch_params,
+                self.cm.nas.get('optimizer'), 
+                self.cm.nas.get('learn_rate'))
+            self.nas_tau_scheduler: TauScheduler = TauScheduler(
+                self.tau_params, 
+                self.cm.epochs, 
+                self.cm.nas.get("max_tau"),
+                self.cm.nas.get("min_tau"),
+                self.cm.nas.get("annealing"))
+            nas_dataloader: DataLoader = self.data_mng.get_dataloader("val", rank=self.rank, shuffle=True)
         
         if self.isactive():
             self.log.info(self.model.info(), fn=True)
@@ -80,7 +106,11 @@ class Trainer(Tester):
             metrics = self.met_mng.get_metrics_holder(self.cm.task, self.epoch)
             
             # learn & val
-            self.train_epoch(train_dataloader, metrics)
+            if self.cm.nas:
+                tau = self.nas_tau_scheduler.step(self.epoch)
+                self.nas_epoch(train_dataloader, nas_dataloader, metrics, tau)
+            else:
+                self.train_epoch(train_dataloader, metrics)
             val_loss: Number = self.val_epoch(val_dataloader, metrics)
             
             if not self.isactive():  # following codes should be ran only once a cycle
@@ -114,6 +144,9 @@ class Trainer(Tester):
             self.focusing("train", worst_category.item())
             self.focusing("test", worst_category.item())
             self.am.plot_metrics(self.met_mng.metrics_collect)
+            # nas state
+            if self.cm.nas:
+                self.nas_state()
             # save caches
             self.data_mng.save_caches()
     
@@ -185,6 +218,47 @@ class Trainer(Tester):
             
         return self.recorder.get_mean_loss()
     
+    def nas_epoch(self, dataloader: DataLoader, nas_dataloader: DataLoader, metrics: MetricsManager.Metrics, tau: float):
+        losses = []
+
+        # let one of the devices handle process bar
+        if self.isactive():
+            self.log.info(f"[nas training] tau: {tau}", fn=True)
+            self.log.bar_init(len(dataloader), self.get_bar_desc('train'))
+
+        for x, label in dataloader:
+            # model params
+            self.model.train()
+            x, label = self.move_batch(x, label)
+            output = self.model(x)
+            self.optimizer.zero_grad()
+            loss: Tensor = self.criterion(output, label)
+            loss.backward()
+            self.optimizer.step()
+            losses.append(loss.item())
+            
+            # arch params
+            self.model.eval()
+            x, label = next(iter(nas_dataloader))
+            x, label = self.move_batch(x, label)
+            output = self.model(x)
+            self.nas_optimizer.zero_grad()
+            loss: Tensor = self.criterion(output, label)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.arch_params, max_norm=1.0)  # gradient clipping
+            self.nas_optimizer.step()
+            
+            if self.isactive():
+                self.log.bar_update()
+                
+        if self.isactive():
+            self.log.bar_close()
+        mean_loss = Recorder.converge_loss(losses)
+        
+        # let one of the devices fill the blanks
+        if self.isactive():
+            metrics.record_train(mean_loss)
+    
     def step_scheduler(self, val_loss: Number, met: MetricsManager.Metrics):
         import warnings
         warnings.filterwarnings('ignore', category=UserWarning)
@@ -246,6 +320,13 @@ class Trainer(Tester):
     
     def isactive(self) -> bool:
         return self.rank in self.active_rank
+    
+    def nas_state(self):
+        import yaml
+        assert isinstance(self.model, Model)
+        yaml_ls = ['- ' + str(layer.get_yaml_obj()) for layer in self.model.layers if isinstance(layer, BaseModule)]
+        self.log.info("...nas result...", fn=True)
+        self.log.info(yaml_ls)
             
     @staticmethod
     def init_trainer(rank, cm: ConfigManager, am: ArtifactManager, log: LogInterface, model_mng: ModelManager, data_mng: DataLoaderManager, met_mng: MetricsManager):

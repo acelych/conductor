@@ -126,6 +126,7 @@ class ModelManager():
             
             m: BaseModule = ModuleProvider.get_module(m)
             c1, c2, args, kwargs = m.yaml_args_parser(channels, f, ModuleProvider.get_modules(), args)
+            kwargs['yaml_obj'] = layers_desc[i]
             
             if i == 0:
                 channels = [c2]
@@ -140,7 +141,7 @@ class ModelManager():
 
             args_desc = [str([(item if isbuiltin(item) else get_module_class_str(item)) for item in args])]
             if len(kwargs) > 0:
-                args_desc.append(str({k: (v if isbuiltin(v) else get_module_class_str(v)) for k, v in kwargs.items()}))
+                args_desc.append(str({k: (v if isbuiltin(v) else get_module_class_str(v)) for k, v in kwargs.items() if k != 'yaml_obj'}))
             _m.args = ' '.join(args_desc)
 
             layers.append(_m)

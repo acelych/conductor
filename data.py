@@ -139,13 +139,12 @@ class DataLoaderManager:
         else:
             raise AssertionError(f"expect legal stage (train, test, val), got {stage}")
         
-    def get_dataloader(self, stage: str, rank = None):
+    def get_dataloader(self, stage: str, rank = None, shuffle = False):
         using_ddp = self.cm.isddp()
         if using_ddp:
             assert isinstance(rank, int), f"expect exact rank number for ddp training."
         
         dataset = self.get_dataset(stage=stage)
-        shuffle = True if stage == "train" else False
         
         sampler = DistributedSampler(dataset, num_replicas=len(self.cm.world), rank=rank) if using_ddp else None
         return DataLoader(dataset, batch_size=self.cm.batch_size, sampler=sampler, shuffle=shuffle)

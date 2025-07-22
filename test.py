@@ -111,7 +111,7 @@ class Tester:
     def focusing(self, stage: str, category_idx: int, amount: int = 25):
         self.log.info(f"...sampling {self.data_mng.names[category_idx]}({category_idx}) category from {stage} dataset...")
         nc = self.model_mng.model_desc.get("nc")
-        assert 0 < category_idx < nc, f"expect category index between 0 & {nc}, got {category_idx}"
+        assert 0 <= category_idx < nc, f"expect category index between 0 & {nc}, got {category_idx}"
         
         inputs = []
         for i in range(len(self.data_mng.get_dataset(stage=stage))):

@@ -37,6 +37,7 @@ class ConfigManager:
         epochs: int = 300,
         imgsz: Union[int, tuple] = (224, 224),
         best_metrics: str = "val_loss",
+        nas: Dict[str, Any] = None,  # whether to use nas module
         **kwargs: Dict[str, Any],  # accept unexpected args
         ):
         self.model_yaml_path: Path = Path(model_yaml_path)
@@ -56,6 +57,7 @@ class ConfigManager:
         self.epochs = int(epochs)
         self.imgsz = imgsz
         self.best_metrics = best_metrics
+        self.nas = nas  # whether to use nas module
         self.__dict__.update(kwargs)
 
     def info(self) -> list:
@@ -66,15 +68,15 @@ class ConfigManager:
             info_list.append(f"{k}: {v}")
         return info_list
         
-    def build_optimizer(self, model: nn.Module):
-        if self.optimizer in [optim.Adam, optim.AdamW, optim.Adamax, optim.NAdam, optim.RAdam]:
-            opt_instance = self.optimizer(model.parameters(), lr=self.learn_rate, betas=(self.momentum, 0.999), weight_decay=self.decay)
-        elif self.optimizer == optim.RMSprop:
-            opt_instance = optim.RMSprop(model.parameters(), lr=self.learn_rate, momentum=self.momentum, weight_decay=self.decay)
-        elif self.optimizer == optim.SGD:
-            opt_instance = optim.SGD(model.parameters(), lr=self.learn_rate, momentum=self.momentum, weight_decay=self.decay, nesterov=True)
+    def build_optimizer(self, params, opt, lr) -> optim.Optimizer:
+        if opt in [optim.Adam, optim.AdamW, optim.Adamax, optim.NAdam, optim.RAdam]:
+            opt_instance = opt(params, lr=lr, betas=(self.momentum, 0.999), weight_decay=self.decay)
+        elif opt == optim.RMSprop:
+            opt_instance = optim.RMSprop(params, lr=lr, momentum=self.momentum, weight_decay=self.decay)
+        elif opt == optim.SGD:
+            opt_instance = optim.SGD(params, lr=lr, momentum=self.momentum, weight_decay=self.decay, nesterov=True)
         else:
-            raise NotImplementedError(f"unexpected optimizer '{self.optimizer.__name__}'")
+            raise NotImplementedError(f"unexpected optimizer '{opt.__name__}'")
         return opt_instance
     
     def build_scheduler(self, opt: optim.Optimizer, steps_per_epoch: int, **kwargs):
@@ -230,6 +232,28 @@ class ConfigManager:
             if isinstance(imgsz, Sequence):
                 assert len(imgsz) == 2 and all((isinstance(it, int) for it in imgsz)), f"expect imgsz to be a 2 integers' sequence"
             kwargs['imgsz'] = tuple(imgsz)
+            
+        # nas
+        nas = kwargs.get('nas')
+        if nas:
+            assert isinstance(nas, dict), f"expect nas to be a dict, got {type(nas)}"
+            assert nas.get('optimizer') is not None, f"expect nas optimizer to be defined"
+            assert nas.get('learn_rate') is not None, f"expect nas learn_rate to be defined"
+            assert nas.get('min_tau') is not None, f"expect nas minimum of tau to be defined"
+            assert nas.get('max_tau') is not None, f"expect nas maximum of tau to be defined"
+            
+            nas_optimizer_cls = getattr(optim, nas.get('optimizer').lstrip('optim.'), None)
+            assert nas_optimizer_cls, f"unexpected optimizer '{nas.get('optimizer')}'"
+            
+            nas['optimizer'] = nas_optimizer_cls
+            nas['learn_rate'] = float(nas.get('learn_rate'))
+            nas['min_tau'] = float(nas.get('min_tau'))
+            nas['max_tau'] = float(nas.get('max_tau'))
+            
+            assert nas['min_tau'] > 0, f"expect nas minimum of tau greater than zero"
+            assert nas['max_tau'] > 0, f"expect nas maximum of tau greater than zero"
+            assert nas['min_tau'] < nas['max_tau'], f"expect nas minimum of tau less than maximum"
+            kwargs['nas'] = nas
         
         return cls(**kwargs), info
     

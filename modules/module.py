@@ -4,6 +4,7 @@ from torch import nn, optim
 from .block import *
 from .conv import *
 from .head import *
+from .nas import *
 from ._utils import BaseModule
 
 class ModuleProvider():
@@ -17,6 +18,10 @@ class ModuleProvider():
         StarBlock,
         Classifier,
         ClassifierSimple,
+        SearchableBlank,
+        SearchableModule,
+        SearchableBaseModule,
+        SearchableConvNormAct,
     ]
     _modules: dict = {m.__name__: m for m in _modules}
     

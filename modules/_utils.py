@@ -1,10 +1,10 @@
-from typing import Tuple, Dict
+from typing import Optional, Tuple, Dict, Sequence, List, Union, Any
 
 import torch
 from torch import nn, Tensor
 
 
-def _convert_str2class(m_str: str, modules: dict):
+def _convert_str2class(m_str: str, modules: dict) -> Optional[Union[type, nn.Module]]:
     if m_str is None:
         return None
     
@@ -17,10 +17,29 @@ def _convert_str2class(m_str: str, modules: dict):
     
     return m
 
+def _autopad(k, p=None, d=1):
+    if p is None:
+        if isinstance(k, int) and isinstance(d, int):
+            p = (k - 1) * d // 2
+        elif isinstance(k, (int, Sequence)) and isinstance(d, (int, Sequence)):
+            _dim = len(k) if isinstance(k, Sequence) else len(d)
+            k = k if isinstance(k, Sequence) else tuple(k for _ in range(_dim))
+            d = d if isinstance(d, Sequence) else tuple(d for _ in range(_dim))
+            p = tuple((k[i] - 1) * d[i] // 2 for i in range(_dim))
+        else:
+            raise TypeError(f"expect kernel-size & dilation to be int or Sequence, got k:'{k.__class__.__name__}'; d:'{d.__class__.__name__}' instead.")
+    return p
+
 class BaseModule(nn.Module):
+    def __init__(self, yaml_obj: object = None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.yaml_obj = yaml_obj
+        
+    def get_yaml_obj(self) -> object:
+        return self.yaml_obj
 
     @staticmethod
-    def yaml_args_parser(channels, former, modules, args) -> Tuple[int, int, list, dict]:
+    def yaml_args_parser(channels: List[int], former: Union[List[int], int], modules: dict, args: List[Any]) -> Tuple[int, int, list, dict]:
         raise NotImplementedError
     
 

@@ -31,8 +31,7 @@ def get_model_assessment(model: nn.Module, imgsz: Union[int, Sequence] = 244, mo
     n_p = sum(x.numel() for x in model.parameters())  # number of parameters
     n_g = sum(x.numel() for x in model.parameters() if x.requires_grad)  # number of gradients
 
-    p = next(model.parameters())
-    im = torch.empty((1, p.shape[1], *imgsz), device=p.device)  # input image in BCHW format
+    im = torch.empty((1, 3, *imgsz), device=next(model.parameters()).device)  # input image in BCHW format
     try:
         model_ = deepcopy(model.module if isinstance(model, (nn.parallel.DistributedDataParallel)) else model)
     except Exception as e:
