@@ -77,7 +77,7 @@ class SearchableModule(BaseModule):
         super().__init__(**kwargs)
         self.ops = nn.ModuleList(list(candidates))
         self.nas_alpha = Parameter(torch.randn(len(self.ops)) * 1e-1)  # Architecture parameters
-        self.nas_tau = nn.Parameter(torch.tensor(4), requires_grad=False)  # Temperature param for Gumbel softmax
+        self.nas_tau = nn.Parameter(torch.tensor(4.0, dtype=torch.float), requires_grad=False)  # Temperature param for Gumbel softmax
         
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         weights = F.gumbel_softmax(self.nas_alpha, tau=self.nas_tau.data, hard=True, dim=-1)
