@@ -76,7 +76,7 @@ class Trainer(Tester):
                 self.model_params.append(param)
 
         self.criterion: nn.Module = self.cm.criterion()
-        self.optimizer: optim.Optimizer = self.cm.build_optimizer(self.model_params, self.cm.optimizer, self.cm.learn_rate)
+        self.optimizer: optim.Optimizer = self.cm.build_optimizer(self.model_params, self.cm.optimizer, self.cm.learn_rate, self.cm.decay)
         self.scheduler: LR_Scheduler = self.cm.build_scheduler(self.optimizer, len(train_dataloader))
 
         self.recorder: Recorder = Recorder(self.model_mng.model_desc.get("nc"))
@@ -86,7 +86,8 @@ class Trainer(Tester):
             self.nas_optimizer: optim.Optimizer = self.cm.build_optimizer(
                 self.arch_params,
                 self.cm.nas.get('optimizer'), 
-                self.cm.nas.get('learn_rate'))
+                self.cm.nas.get('learn_rate'),
+                self.cm.nas.get('decay'))
             self.nas_tau_scheduler: TauScheduler = TauScheduler(
                 self.tau_params, 
                 self.cm.epochs, 

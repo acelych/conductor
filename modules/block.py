@@ -374,7 +374,7 @@ class AdaptiveCrossHadamard(nn.Module):
             x_sel = (mask_mat @ x.flatten(2)).view(_shape)
             x_sel_ex = x_sel[:, self.hadamard_i, ...] * x_sel[:, self.hadamard_j, ...]
         else:
-            if 'cross_hada_mixed' in globals():
+            if 'cross_hada_mixed' in globals() and x.is_cuda:
                 x_sel_ex = cross_hada_mixed(x, logits, self.cs)
             else:
                 _, topk_idx = torch.topk(logits, self.cs)

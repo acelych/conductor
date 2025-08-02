@@ -1,35 +1,16 @@
 nc: &nc 100
 task: classify
 backbone:
-  # - [-1, 1, ConvNormAct, [[16, 3, 2], BatchNorm2d, Hardswish]]  # [[c2, k, ...], BatchNorm2d, Hardswish]
-  # - [-1, 1, InvertedResidual, [16, 16, 3, 2, 1, true, ReLU]]  # -> C1
-  # # - [-1, 1, HadamardResidualV2, [24, 11, 3, 2, 1, false, ReLU]]  # -> C2; cs: 11, cs_ex: 55, ce: 79
-  # - [-1, 1, InvertedResidual, [24, 72, 3, 2, 1, false, ReLU]]  # -> C2
-  # - [-1, 1, InvertedResidual, [24, 88, 3, 1, 1, false, ReLU]]
-  # - [-1, 1, InvertedResidual, [40, 96, 5, 2, 1, true, Hardswish]]  # -> C3
-  # - [-1, 1, InvertedResidual, [40, 240, 5, 1, 1, true, Hardswish]]
-  # - [-1, 1, InvertedResidual, [40, 240, 5, 1, 1, true, Hardswish]]
-  # - [-1, 1, InvertedResidual, [48, 120, 5, 1, 1, true, Hardswish]]
-  # - [-1, 1, InvertedResidual, [48, 144, 5, 1, 1, true, Hardswish]]
-  # - [-1, 1, InvertedResidual, [96, 288, 5, 2, 1, true, Hardswish]]  # -> C4
-  # - [-1, 1, HadamardResidualV2, [96, 32, 5, 1, 1, true, Hardswish]]  # cs: 32, cs_ex: 496, ce: 592
-  # # - [-1, 1, InvertedResidual, [96, 576, 5, 1, 1, true, Hardswish]]
-  # - [-1, 1, InvertedResidual, [96, 576, 5, 1, 1, true, Hardswish]]
-  # - [-1, 1, ConvNormAct, [[576, 1, 1], BatchNorm2d, Hardswish]]
   - [-1, 1, ConvNormAct, [[16, 3, 2], BatchNorm2d, Hardswish]]  # [[c2, k, ...], BatchNorm2d, Hardswish]
   - [-1, 1, InvertedResidual, [16, 16, 3, 2, 1, true, ReLU]]  # -> C1
-  # - [-1, 1, HadamardResidualV2, [24, 11, 3, 2, 1, false, ReLU]]  # -> C2; cs: 11, cs_ex: 55, ce: 79
   - [-1, 1, InvertedResidual, [24, 72, 3, 2, 1, false, ReLU]]  # -> C2
   - [-1, 1, InvertedResidual, [24, 88, 3, 1, 1, false, ReLU]]
   - [-1, 1, InvertedResidual, [40, 96, 5, 2, 1, true, Hardswish]]  # -> C3
   - [-1, 1, InvertedResidual, [40, 240, 5, 1, 1, true, Hardswish]]
   - [-1, 1, InvertedResidual, [40, 240, 5, 1, 1, true, Hardswish]]
   - [-1, 1, InvertedResidual, [48, 120, 5, 1, 1, true, Hardswish]]
-  # - [-1, 1, HadamardResidualV2, [48, 15, 5, 1, 1, true, Hardswish]]  # cs: 15, cs_ex: 105, ce: 153
   - [-1, 1, InvertedResidual, [48, 144, 5, 1, 1, true, Hardswish]]
   - [-1, 1, InvertedResidual, [96, 288, 5, 2, 1, true, Hardswish]]  # -> C4
-  # - [-1, 1, InvertedResidual, [96, 576, 5, 1, 1, true, Hardswish]]
-  # - [-1, 1, InvertedResidual, [96, 576, 5, 1, 1, true, Hardswish]]
   - [-1, 1, HadamardResidualV2, [96, 32, 5, 1, 1, true, Hardswish]]  # cs: 32, cs_ex: 496, ce: 592
   - [-1, 1, HadamardResidualV2, [96, 32, 5, 1, 1, true, Hardswish]]  # cs: 32, cs_ex: 496, ce: 592
   - [-1, 1, ConvNormAct, [[576, 1, 1], BatchNorm2d, Hardswish]]

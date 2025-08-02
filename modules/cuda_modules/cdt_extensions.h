@@ -11,6 +11,7 @@ namespace cdt
 
 torch::Tensor crossHadamard(torch::Tensor matrices);
 torch::Tensor crossHadamardMixed(torch::Tensor matrices, torch::Tensor logits, const int k);
+torch::Tensor crossHadamardBalanced(torch::Tensor matrices);
 torch::Tensor sortAPI(torch::Tensor &matrices, const int k);
 
 }; // namespace cdt

@@ -37,9 +37,6 @@ class Conductor:
             orch.test()
         elif self.cm.command == 'profile':
             orch = Profiler(self.cm, self.am, self.log)
-            if (self.cm.device != 'cuda'):
-                self.log.info("Profiler only supports CUDA device, exiting...")
-                return
             orch.profile()
         else:
             self.log.info(f"Unknown command: {self.cm.command}, exiting...")

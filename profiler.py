@@ -1,3 +1,4 @@
+import time
 from typing import Tuple
 
 import torch
@@ -23,16 +24,36 @@ class Profiler:
 
         model = self.model_mng.build_model().to(self.cm.device)
         data = torch.randn(1, 3, *self.cm.imgsz).to(self.cm.device)  # Test random rgb tensor
-
-        self.log.info(model.info(), fn=True)
-        self.log.info(f"start inference through random tensor shape: {data.shape}...", fn=True)
-
+        
         model.eval()
+
+        # --------------------------
+        # Step 0: Print Model Info
+        # --------------------------
+        try:
+            import sys
+            from io import StringIO
+            from torchinfo import summary
+            
+            output_buffer = StringIO()
+            original_stdout = sys.stdout
+            sys.stdout = output_buffer
+            
+            summary(model, input_size=data.shape)
+            sys.stdout = original_stdout
+            
+            self.log.info(output_buffer.getvalue().splitlines())
+            output_buffer.close()
+            model.to(self.cm.device)
+        except ImportError:
+            self.log.info(model.info(), fn=True)
+        
+        self.log.info(f"start inference through random tensor shape: {data.shape}...", fn=True)
 
         # --------------------------
         # Step 1: PyTorch Profiling
         # --------------------------
-        sches = [1, 5, 5]
+        sches = [1, 5, 10]
         with profiler.profile(
             activities=[
                 profiler.ProfilerActivity.CPU,
@@ -50,6 +71,16 @@ class Profiler:
 
         self.log.info("profiling completed. results saved to TensorBoard.")
         self.log.info(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10), fn=True)
+        
+        with torch.no_grad():
+            self.log.info(f"testing latency (with shape: {data.shape})")
+            for _ in range(10):
+                model(data)
+            start_time = time.time()
+            for _ in range(500):
+                model(data)
+            latency = (time.time() - start_time) / 500
+        self.log.info(f"model latency: {latency * 1e3}ms", bn=True)
 
         # --------------------------
         # Step 2: Export to ONNX

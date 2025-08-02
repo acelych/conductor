@@ -68,13 +68,13 @@ class ConfigManager:
             info_list.append(f"{k}: {v}")
         return info_list
         
-    def build_optimizer(self, params, opt, lr) -> optim.Optimizer:
+    def build_optimizer(self, params, opt, lr, decay) -> optim.Optimizer:
         if opt in [optim.Adam, optim.AdamW, optim.Adamax, optim.NAdam, optim.RAdam]:
-            opt_instance = opt(params, lr=lr, betas=(self.momentum, 0.999), weight_decay=self.decay)
+            opt_instance = opt(params, lr=lr, betas=(self.momentum, 0.999), weight_decay=decay)
         elif opt == optim.RMSprop:
-            opt_instance = optim.RMSprop(params, lr=lr, momentum=self.momentum, weight_decay=self.decay)
+            opt_instance = optim.RMSprop(params, lr=lr, momentum=self.momentum, weight_decay=decay)
         elif opt == optim.SGD:
-            opt_instance = optim.SGD(params, lr=lr, momentum=self.momentum, weight_decay=self.decay, nesterov=True)
+            opt_instance = optim.SGD(params, lr=lr, momentum=self.momentum, weight_decay=decay, nesterov=True)
         else:
             raise NotImplementedError(f"unexpected optimizer '{opt.__name__}'")
         return opt_instance
@@ -223,7 +223,7 @@ class ConfigManager:
 
         # batch_size
         batch_size = kwargs.get('batch_size')
-        if batch_size:
+        if batch_size and world:
             assert batch_size % len(world) == 0, f"expect batch size a multiple of amount of devices."
 
         # imgsz
@@ -241,6 +241,7 @@ class ConfigManager:
             assert nas.get('learn_rate') is not None, f"expect nas learn_rate to be defined"
             assert nas.get('min_tau') is not None, f"expect nas minimum of tau to be defined"
             assert nas.get('max_tau') is not None, f"expect nas maximum of tau to be defined"
+            assert nas.get('decay') is not None, f"expect nas weight decay to be defined"
             
             nas_optimizer_cls = getattr(optim, nas.get('optimizer').lstrip('optim.'), None)
             assert nas_optimizer_cls, f"unexpected optimizer '{nas.get('optimizer')}'"
@@ -249,10 +250,13 @@ class ConfigManager:
             nas['learn_rate'] = float(nas.get('learn_rate'))
             nas['min_tau'] = float(nas.get('min_tau'))
             nas['max_tau'] = float(nas.get('max_tau'))
+            nas['decay'] = float(nas.get('decay'))
             
             assert nas['min_tau'] > 0, f"expect nas minimum of tau greater than zero"
             assert nas['max_tau'] > 0, f"expect nas maximum of tau greater than zero"
             assert nas['min_tau'] < nas['max_tau'], f"expect nas minimum of tau less than maximum"
+            assert nas['learn_rate'] > 0, f"expect nas learn_rate greater than zero"
+            assert nas['decay'] > 0, f"expect nas weight decay greater than zero"
             kwargs['nas'] = nas
         
         return cls(**kwargs), info
