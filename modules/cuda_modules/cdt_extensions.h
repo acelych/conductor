@@ -12,7 +12,7 @@ namespace cdt
 torch::Tensor crossHadamard(torch::Tensor matrices);
 torch::Tensor crossHadamardMixed(torch::Tensor matrices, torch::Tensor logits, const int k);
 torch::Tensor crossHadamardBalanced(torch::Tensor matrices);
-torch::Tensor sortAPI(torch::Tensor &matrices, const int k);
+void dySoft(torch::Tensor matrices, torch::Tensor alpha, torch::Tensor weight, torch::Tensor bias);
 
 }; // namespace cdt
 

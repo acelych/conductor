@@ -317,7 +317,7 @@ class AdaptiveCrossHadamard(nn.Module):
         # self.eva_net = MVE(c1)
 
         # gumbel-softmax
-        self.tau = nn.Parameter(torch.tensor(1.8))
+        self.tau = nn.Parameter(torch.tensor(4.0), requires_grad=False)
         self.tau_adj = nn.Parameter(torch.tensor(0), requires_grad=False)
         
         # cross-hadamard
@@ -383,10 +383,10 @@ class AdaptiveCrossHadamard(nn.Module):
                 x_sel_ex = x_sel[:, self.hadamard_i, ...] * x_sel[:, self.hadamard_j, ...]
         return x_sel_ex
 
-    def _adjust_tau_with_grad(self, grad: Tensor, alpha: float = 0.01):
+    def _adjust_tau_with_grad(self, grad: Tensor, alpha: float = 0.005):
         if self.tau_adj.data != 0 and grad is not None:
-            alpha *= 1 if self.tau_adj <= grad.norm() else -1
-            self.tau.data = torch.clamp(self.tau * (1 + alpha), max=4.0, min=0.1)
+            alpha *= 1.0 if self.tau_adj <= grad.norm() else -1.0
+            self.tau.data = torch.clamp(self.tau * (1.0 + alpha), max=4.0, min=0.01)
         if grad is not None:
             self.tau_adj.data = grad.norm()
 

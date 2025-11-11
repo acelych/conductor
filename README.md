@@ -5,3 +5,7 @@ Conductor is a trainer for Pytorch. Its purpose is to facilitate experiments on 
 In this different project, it's easy to track the training process and using custom module.
 
 //TODO
+
+## Requirements
+
+matplotlib thop timm pyarrow pandas

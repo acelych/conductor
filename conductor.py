@@ -13,11 +13,14 @@ from .utils import ConfigManager, ArtifactManager, LogInterface, MetricsManager
 
 
 class Conductor:
-    def __init__(self, cfg_path: Union[str, Path]):
-        if isinstance(cfg_path, str):
-            cfg_path = Path(cfg_path)
-        with open(cfg_path, 'r') as f:
-            cfg: dict = yaml.safe_load(f)
+    def __init__(self, cfg_path: Union[dict, str, Path]):
+        if isinstance(cfg_path, dict):
+            cfg: dict = cfg_path
+        else:
+            if isinstance(cfg_path, str):
+                cfg_path = Path(cfg_path)
+            with open(cfg_path, 'r') as f:
+                cfg: dict = yaml.safe_load(f)
 
         self.cm, cm_log = ConfigManager.get_instance(**cfg)
         self.cm: ConfigManager
@@ -28,7 +31,6 @@ class Conductor:
         self.log.info(self.cm.info(), fn=True, bn=True)
 
     def run(self):
-
         if self.cm.command == 'train':
             orch = TrainerManager(self.cm, self.am, self.log)
             orch.train()
@@ -38,6 +40,17 @@ class Conductor:
         elif self.cm.command == 'profile':
             orch = Profiler(self.cm, self.am, self.log)
             orch.profile()
+        else:
+            self.log.info(f"Unknown command: {self.cm.command}, exiting...")
+            pass
+        
+    def get_command(self):
+        if self.cm.command == 'train':
+            return TrainerManager(self.cm, self.am, self.log)
+        elif self.cm.command == 'test':
+            return Tester(self.cm, self.am, self.log)
+        elif self.cm.command == 'profile':
+            return Profiler(self.cm, self.am, self.log)
         else:
             self.log.info(f"Unknown command: {self.cm.command}, exiting...")
             pass

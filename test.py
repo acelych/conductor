@@ -1,8 +1,10 @@
 from typing import Tuple
 
 import torch
+import torch.nn.functional as F
 from torch import nn, Tensor
 from torch.utils.data import DataLoader
+import numpy as np
 
 from .model import ModelManager
 from .data import DataLoaderManager
@@ -136,3 +138,57 @@ class Tester:
         
     def move_batch(self, *args: Tensor) -> tuple:
         return (arg.to(self.device) for arg in args)
+    
+    # Grad-CAM
+    class GradCAM:
+        def __init__(self, model):
+            self.model = model
+            self.feature_maps = None
+            self.gradients = None
+
+        def _save_feature_maps(self, module, input, output):
+            self.feature_maps = output.detach()
+
+        def _save_gradients(self, module, grad_in, grad_out):
+            self.gradients = grad_out[0].detach()
+
+        def generate_cam(self, input_tensor, target_layer, target_class_idx=None):
+            # 1. registe hooker at specific layer
+            forward_handle = target_layer.register_forward_hook(self._save_feature_maps)
+            backward_handle = target_layer.register_full_backward_hook(self._save_gradients)
+
+            # 2. forward
+            self.model.eval()
+            output = self.model(input_tensor)
+
+            if target_class_idx is None:
+                target_class_idx = output.argmax(dim=1).item()
+
+            # 3. backward
+            self.model.zero_grad()
+            class_score = output[0, target_class_idx]
+            class_score.backward(retain_graph=True)
+
+            # 4. calc CAM
+            if self.feature_maps is None or self.gradients is None:
+                # remove hookers immediately to prevent mem leak
+                forward_handle.remove()
+                backward_handle.remove()
+                raise RuntimeError("Failed to capture features or gradients.")
+                
+            weights = F.adaptive_avg_pool2d(self.gradients, 1)
+            cam = torch.sum(weights * self.feature_maps, dim=1, keepdim=True)
+            cam = F.relu(cam)
+            
+            # 5. remove hookers after every calc
+            forward_handle.remove()
+            backward_handle.remove()
+            
+            # 6. afterwards...
+            cam = F.interpolate(cam, input_tensor.shape[2:], mode='bilinear', align_corners=False)
+            cam = (cam - cam.min()) / (cam.max() - cam.min())
+
+            return cam.squeeze().cpu().numpy()
+        
+    def get_cam(self) -> GradCAM:
+        return Tester.GradCAM(self.model)

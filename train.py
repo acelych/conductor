@@ -102,6 +102,8 @@ class Trainer(Tester):
             self.log.info(model_assessment, fn=True)
 
         self.met_mng.start()
+        
+        # self.ach_adj = TauScheduler([param for name, param in self.model.named_parameters() if ('tau' in name and 'tau_adj' not in name)], self.cm.epochs, 4.0, 0.01, 'rational')
 
         for self.epoch in range(self.load_state(self.am.ckpt), self.cm.epochs):
             metrics = self.met_mng.get_metrics_holder(self.cm.task, self.epoch)
@@ -111,6 +113,7 @@ class Trainer(Tester):
                 tau = self.nas_tau_scheduler.step(self.epoch)
                 self.nas_epoch(train_dataloader, nas_dataloader, metrics, tau)
             else:
+                # self.ach_adj.step(self.epoch)
                 self.train_epoch(train_dataloader, metrics)
             val_loss: Number = self.val_epoch(val_dataloader, metrics)
             
@@ -126,6 +129,11 @@ class Trainer(Tester):
             metrics = self.met_mng(metrics)  # add time stick & save to met_mng
             self.log.metrics(vars(metrics))  # write to metrics.csv
             self.save_state(best_fitness)  # save last & probably best
+            
+            # watch hada tau
+            self.log.info("tau: ")
+            self.log.info(', '.join(
+                [f"{float(v):.6f}" for k,v in self.model.state_dict().items() if ('tau' in k and 'tau_adj' not in k)]))
 
         if self.isactive():
             # test

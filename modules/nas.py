@@ -16,7 +16,7 @@ class TauScheduler:
         total_epochs: int,
         max_tau: float = 4.0,
         min_tau: float = 0.1,
-        annealing: Literal["linear", "exp", "cos"] = "cos",
+        annealing: Literal["linear", "exp", "cos", "rational"] = "cos",
     ):
         self.params = params
         self.max_tau = max_tau
@@ -29,6 +29,7 @@ class TauScheduler:
             "linear": lambda e: self.max_tau - (self.max_tau - self.min_tau) * (e / self.total_epochs),
             "exp": lambda e: self.max_tau * ((self.min_tau / self.max_tau) ** (e / self.total_epochs)),
             "cos": lambda e: self.min_tau + 0.5 * (self.max_tau - self.min_tau) * (1 + math.cos(math.pi * e / self.total_epochs)),
+            "rational": lambda e: self.min_tau + (self.max_tau - self.min_tau) * ((1 - e / self.total_epochs) / (1 + 5.0 * (e / self.total_epochs))),
         }
         return strategies[method]
 

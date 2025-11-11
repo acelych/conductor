@@ -12,7 +12,7 @@ setup(
             sources=[
                 'cdt_extensions.cpp',
                 'cross_hada.cu',
-                'topk.cu'
+                'dysoft.cu'
                 ],
             extra_compile_args={
                 'cxx': ['-O2'],

@@ -3,6 +3,8 @@ from typing import Tuple
 import torch
 from torch import nn, Tensor
 
+from .cuda_modules.cdt_extensions import *
+
 class CrossHadaNorm(nn.Module):
     def __init__(self, cs_expand):
         super().__init__()
@@ -57,9 +59,13 @@ class DySoft(nn.Module):
         self.bias = nn.Parameter(torch.zeros(1, dim, 1, 1))
         
     def forward(self, x: Tensor) -> Tensor:
-        x = self.alpha * x
-        x = x / (1 + torch.abs(x))
-        return x * self.weight + self.bias
+        if self.training:
+            x = self.alpha * x
+            x = x / (1 + torch.abs(x))
+            return x * self.weight + self.bias
+        else:
+            dysoft(x, self.alpha, self.weight, self.bias)
+            return x
     
     
 class DyAlge(nn.Module):
