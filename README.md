@@ -53,6 +53,14 @@ head:
 or direct get models from `./utils/resources/example/*`. For `data.yaml`, check `./temp/cifar100.yaml` as example. 
 To use CIFAR100 dataset, you have to download them next to the `cifar100.yaml` file.
 
+Please ensure that nvcc is availble within your runtime env, then compile CUDA Kernels which required by 
+some specific modules:
+
+```sh
+cd ./modules/cuda_modules
+python setup.py build_ext --inplace
+```
+
 Finally, write a python script at `../` of current path:
 
 ```python

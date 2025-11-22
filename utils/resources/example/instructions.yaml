@@ -1,13 +1,11 @@
 # example of instruction yaml
 
 # basics
-model_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/utils/resources/example/mobilenetv4_l.yaml
-# model_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/utils/resources/example/hadamard.yaml
-# model_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/utils/resources/example/hadaptivenet_s.yaml
-# model_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/utils/resources/example/mobilenetv3_small.yaml
-# model_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/utils/resources/example/starnet_s1.yaml
-# model_yaml_path: mobilenet_v3_small,{'num_classes':100}
-data_yaml_path: C:/Workspace/DataScience/ComputerVision/conductor/temp/cifar100.yaml
+model_yaml_path: /root/workspace/conductor/utils/resources/example/hadaptivenet_s.yaml
+# ------ for ./models/*.py or torchvision models ------
+# model_yaml_path: "mobilevit_ach,{'num_classes': 100}"
+# -----------------------------------------------------
+data_yaml_path: /root/workspace/conductor/temp/cifar100.yaml
 command: train  # command from cli, indicate the Conductor what to do
 task: classify  # task of the model
 
@@ -25,5 +23,5 @@ decay: 1e-4
 best_metrics: top1_acc
 
 # logging & ckpt details
-output_dir: C:/Workspace/DataScience/ComputerVision/conductor/temp/
+output_dir: /root/workspace/conductor/temp
 ckpt: null
