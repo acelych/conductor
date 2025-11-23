@@ -59,13 +59,13 @@ class DySoft(nn.Module):
         self.bias = nn.Parameter(torch.zeros(1, dim, 1, 1))
         
     def forward(self, x: Tensor) -> Tensor:
-        if self.training:
-            x = self.alpha * x
-            x = x / (1 + torch.abs(x))
-            return x * self.weight + self.bias
-        else:
-            dysoft(x, self.alpha, self.weight, self.bias)
-            return x
+        # if self.training:
+        x = self.alpha * x
+        x = x / (1 + torch.abs(x))
+        return x * self.weight + self.bias
+        # else:
+        #     dysoft(x, self.alpha, self.weight, self.bias)
+        #     return x
     
     
 class DyAlge(nn.Module):

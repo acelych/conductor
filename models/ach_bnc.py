@@ -83,7 +83,7 @@ class AdaptiveCrossHadamard(nn.Module):
         
         # fc-expand: 1x1 conv → Linear in BNC
         self.fc = nn.Linear(c1, c1)  # operates on last dim (C)
-        # self.norm_x = nn.LayerNorm(c1)  # norm over channel dim (C), shape [B, N, C]
+        self.norm_x = nn.BatchNorm1d(c1)  # norm over batch dim (B), shape [B, C, N]
         
         # eva-net: use BNC version of ECA
         self.eva_net = ECA(k_size=5, weights_only=True)  # returns [B, 1, C]
@@ -105,19 +105,19 @@ class AdaptiveCrossHadamard(nn.Module):
                 h_idx += 1
 
         # expand normalize: same usage — norm([B, N, D]) where D = cs_expand
-        self.norm = norm(self.ce)
+        self.norm = norm(self.cs_expand)
 
     def forward(self, x: Tensor) -> Tensor:
         # x: [B, N, C] with C == c1
         x = self.fc(x)       # [B, N, C]
-        return x
-        # x = self.norm_x(x)   # [B, N, C]
+        x = x.permute(0, 2, 1)
+        x = self.norm_x(x)   # [B, C, N]
+        x = x.permute(0, 2, 1)
         
         x_sel_ex = self._get_selected(x)  # [B, N, cs_expand]
-        # x_sel_ex = self.norm(x_sel_ex)    # [B, N, cs_expand]
-        x_out = torch.cat([x, x_sel_ex], dim=-1)
+        x_sel_ex = self.norm(x_sel_ex)    # [B, N, cs_expand]
         
-        return self.norm(x_out)  # [B, N, c1 + cs_expand]
+        return torch.cat([x, x_sel_ex], dim=-1)  # [B, N, c1 + cs_expand]
 
     def _get_selected(self, x: Tensor) -> Tensor:
         # x: [B, N, C]
@@ -179,7 +179,7 @@ class AdaptiveBottleneckBNC(nn.Module):
         self.ach = AdaptiveCrossHadamard(in_channel, ex_channel, DySoft)
         self.ce = self.ach.ce
         self.act = nn.SiLU()
-        self.prj = nn.Linear(self.ci, self.ci)
+        self.prj = nn.Linear(self.ce, self.ci)
         
     def forward(self, x: Tensor):
         x = self.ach(x)
@@ -188,10 +188,11 @@ class AdaptiveBottleneckBNC(nn.Module):
         return x
     
     @staticmethod
-    def get_ex_channel(a: int) -> int:
-        discriminant = 1 + 8*a
+    def get_ex_channel(in_channel, expect_channel: int) -> int:
+        expect_channel -= in_channel
+        discriminant = 1 + 8*expect_channel
         
         x1 = (1 + math.sqrt(discriminant)) / 2
         x2 = (1 - math.sqrt(discriminant)) / 2
         
-        return math.ceil(max(x1, x2))
+        return math.floor(max(x1, x2))

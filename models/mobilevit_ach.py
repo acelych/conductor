@@ -8,40 +8,36 @@ import math
 from torch import Tensor
 from typing import Dict, Tuple, Optional, Union
 
-# from ..modules.block import AdaptiveCrossHadamard, DySoft
-from .ach_bnc import AdaptiveBottleneckBNC
+from ..modules.block import AdaptiveCrossHadamard, DySoft, AdaptiveBottleneck
+# from .ach_bnc import AdaptiveBottleneckBNC
 
 
 # ---------------------------------------------------------
 # Extra Block
 # ---------------------------------------------------------
             
-# class AdaptiveBottleneckBNC(nn.Module):
-#     def __init__(self, in_channel: int, ex_channel: int, *args, **kwargs):
-#         super().__init__(*args, **kwargs)
-#         self.ci = in_channel
-#         self.ach = AdaptiveCrossHadamard(in_channel, ex_channel, DySoft)
-#         self.ce = self.ach.ce
-#         self.act = nn.SiLU()
-#         self.prj = nn.Conv2d(self.ce, self.ci, 1)
+class AdaptiveBottleneckBNC(nn.Module):
+    def __init__(self, in_channel: int, ex_channel: int, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.ci = in_channel
+        self.ab = AdaptiveBottleneck(in_channel, in_channel, 'Hada', ex_channel, 3, 1, "DySoft")
         
-#     def forward(self, x: Tensor):
-#         B, N, C = x.shape
-#         x = x.view(B, C, N, 1)
-#         x = self.ach(x)
-#         x = self.act(x)
-#         x = self.prj(x)
-#         x = x.view(B, N, C)
-#         return x
+    def forward(self, x: Tensor):
+        B, N, C = x.shape
+        x = x.view(B, C, N, 1)
+        x = self.ab(x)
+        x = x.view(B, N, C)
+        return x
     
-#     @staticmethod
-#     def get_ex_channel(a: int) -> int:
-#         discriminant = 1 + 8*a
+    @staticmethod
+    def get_ex_channel(in_channel, expect_channel: int) -> int:
+        expect_channel -= in_channel
+        discriminant = 1 + 8*expect_channel
         
-#         x1 = (1 + math.sqrt(discriminant)) / 2
-#         x2 = (1 - math.sqrt(discriminant)) / 2
+        x1 = (1 + math.sqrt(discriminant)) / 2
+        x2 = (1 - math.sqrt(discriminant)) / 2
         
-#         return math.ceil(max(x1, x2))
+        return math.floor(max(x1, x2))
 
 # ---------------------------------------------------------
 # Basic building blocks (Conv, BN, Act, etc.)
@@ -202,6 +198,7 @@ class TransformerEncoder(nn.Module):
         dropout: float = 0.0,
         ffn_dropout: float = 0.0,
         attn_dropout: float = 0.0,
+        use_ach: bool = False,
     ):
         super().__init__()
         self.pre_norm_mha = nn.LayerNorm(embed_dim)
@@ -213,24 +210,23 @@ class TransformerEncoder(nn.Module):
             bias=True,
         )
 
-        self.pre_norm_ffn = nn.LayerNorm(embed_dim)
-        # self.ffn = nn.Sequential(
-        #     nn.Linear(embed_dim, ffn_dim),
-        #     nn.SiLU(),
-        #     nn.Dropout(ffn_dropout),
-        #     nn.Linear(ffn_dim, embed_dim),
-        #     nn.Dropout(dropout),
-        # )
-        self.ab = AdaptiveBottleneckBNC(
+        self.pre_norm_cfl = nn.LayerNorm(embed_dim)
+        self.cfl = AdaptiveBottleneckBNC(
             embed_dim, 
-            AdaptiveBottleneckBNC.get_ex_channel(ffn_dim)
+            AdaptiveBottleneckBNC.get_ex_channel(embed_dim, ffn_dim)
+        ) if use_ach else nn.Sequential(
+            nn.Linear(embed_dim, ffn_dim),
+            nn.SiLU(),
+            nn.Dropout(ffn_dropout),
+            nn.Linear(ffn_dim, embed_dim),
+            nn.Dropout(dropout),
         )
 
     def forward(self, x):
         # Pre-norm + MHA
         x = x + self.mha(self.pre_norm_mha(x))
-        # Pre-norm + AB
-        x = x + self.ab(self.pre_norm_ffn(x))
+        # Pre-norm + Channel Fusion
+        x = x + self.cfl(self.pre_norm_cfl(x))
         return x
 
 
@@ -253,6 +249,7 @@ class MobileViTBlock(nn.Module):
         head_dim: int = 32,
         no_fusion: bool = False,
         conv_ksize: int = 3,
+        use_ach = False,
     ):
         super().__init__()
         self.patch_h = patch_h
@@ -293,6 +290,7 @@ class MobileViTBlock(nn.Module):
                 dropout=dropout,
                 ffn_dropout=ffn_dropout,
                 attn_dropout=attn_dropout,
+                use_ach=use_ach
             )
             for _ in range(n_transformer_blocks)
         ]
@@ -504,7 +502,8 @@ def get_mobilevit_config(mode: str = "small") -> Dict:
                 "stride": 2,
                 "mv_expand_ratio": 4,
                 "block_type": "mobilevit",
-                "num_heads": 4
+                "num_heads": 4,
+                "use_ach": False
             },
             "layer4": {
                 "out_channels": 128,
@@ -516,7 +515,8 @@ def get_mobilevit_config(mode: str = "small") -> Dict:
                 "stride": 2,
                 "mv_expand_ratio": 4,
                 "block_type": "mobilevit",
-                "num_heads": 4
+                "num_heads": 4,
+                "use_ach": False
             },
             "layer5": {
                 "out_channels": 160,
@@ -528,7 +528,8 @@ def get_mobilevit_config(mode: str = "small") -> Dict:
                 "stride": 2,
                 "mv_expand_ratio": 4,
                 "block_type": "mobilevit",
-                "num_heads": 4
+                "num_heads": 4,
+                "use_ach": False
             },
             "last_layer_exp_factor": 4,
         }
@@ -705,6 +706,7 @@ class mobilevit_ach(nn.Module):
             head_dim=head_dim,
             no_fusion=False,
             conv_ksize=3,
+            use_ach=cfg.get("use_ach", False)
         )
         layers.append(mobilevit_block)
 
