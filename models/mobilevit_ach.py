@@ -8,36 +8,36 @@ import math
 from torch import Tensor
 from typing import Dict, Tuple, Optional, Union
 
-from ..modules.block import AdaptiveCrossHadamard, DySoft, AdaptiveBottleneck
-# from .ach_bnc import AdaptiveBottleneckBNC
+# from ..modules.block import AdaptiveCrossHadamard, DySoft, AdaptiveBottleneck
+from .ach_bnc import AdaptiveBottleneckBNC
 
 
 # ---------------------------------------------------------
 # Extra Block
 # ---------------------------------------------------------
             
-class AdaptiveBottleneckBNC(nn.Module):
-    def __init__(self, in_channel: int, ex_channel: int, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.ci = in_channel
-        self.ab = AdaptiveBottleneck(in_channel, in_channel, 'Hada', ex_channel, 3, 1, "DySoft")
+# class AdaptiveBottleneckBNC(nn.Module):
+#     def __init__(self, in_channel: int, ex_channel: int, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#         self.ci = in_channel
+#         self.ab = AdaptiveBottleneck(in_channel, in_channel, 'Hada', ex_channel, 3, 1, "DySoft")
         
-    def forward(self, x: Tensor):
-        B, N, C = x.shape
-        x = x.view(B, C, N, 1)
-        x = self.ab(x)
-        x = x.view(B, N, C)
-        return x
+#     def forward(self, x: Tensor):
+#         B, N, C = x.shape
+#         x = x.view(B, C, N, 1)
+#         x = self.ab(x)
+#         x = x.view(B, N, C)
+#         return x
     
-    @staticmethod
-    def get_ex_channel(in_channel, expect_channel: int) -> int:
-        expect_channel -= in_channel
-        discriminant = 1 + 8*expect_channel
+#     @staticmethod
+#     def get_ex_channel(in_channel, expect_channel: int) -> int:
+#         expect_channel -= in_channel
+#         discriminant = 1 + 8*expect_channel
         
-        x1 = (1 + math.sqrt(discriminant)) / 2
-        x2 = (1 - math.sqrt(discriminant)) / 2
+#         x1 = (1 + math.sqrt(discriminant)) / 2
+#         x2 = (1 - math.sqrt(discriminant)) / 2
         
-        return math.floor(max(x1, x2))
+#         return math.floor(max(x1, x2))
 
 # ---------------------------------------------------------
 # Basic building blocks (Conv, BN, Act, etc.)
@@ -417,7 +417,8 @@ def get_mobilevit_config(mode: str = "small") -> Dict:
                 "stride": 2,
                 "mv_expand_ratio": 2,
                 "block_type": "mobilevit",
-                "num_heads": 4
+                "num_heads": 4,
+                "use_ach": False
             },
             "layer4": {
                 "out_channels": 64,
@@ -429,7 +430,8 @@ def get_mobilevit_config(mode: str = "small") -> Dict:
                 "stride": 2,
                 "mv_expand_ratio": 2,
                 "block_type": "mobilevit",
-                "num_heads": 4
+                "num_heads": 4,
+                "use_ach": True
             },
             "layer5": {
                 "out_channels": 80,
@@ -441,7 +443,8 @@ def get_mobilevit_config(mode: str = "small") -> Dict:
                 "stride": 2,
                 "mv_expand_ratio": 2,
                 "block_type": "mobilevit",
-                "num_heads": 4
+                "num_heads": 4,
+                "use_ach": False
             },
             "last_layer_exp_factor": 4,
         }
@@ -460,7 +463,8 @@ def get_mobilevit_config(mode: str = "small") -> Dict:
                 "stride": 2,
                 "mv_expand_ratio": 4,
                 "block_type": "mobilevit",
-                "num_heads": 4
+                "num_heads": 4,
+                "use_ach": False
             },
             "layer4": {
                 "out_channels": 80,
@@ -472,7 +476,8 @@ def get_mobilevit_config(mode: str = "small") -> Dict:
                 "stride": 2,
                 "mv_expand_ratio": 4,
                 "block_type": "mobilevit",
-                "num_heads": 4
+                "num_heads": 4,
+                "use_ach": True
             },
             "layer5": {
                 "out_channels": 96,
@@ -484,7 +489,8 @@ def get_mobilevit_config(mode: str = "small") -> Dict:
                 "stride": 2,
                 "mv_expand_ratio": 4,
                 "block_type": "mobilevit",
-                "num_heads": 4
+                "num_heads": 4,
+                "use_ach": False
             },
             "last_layer_exp_factor": 4,
         }
@@ -516,7 +522,7 @@ def get_mobilevit_config(mode: str = "small") -> Dict:
                 "mv_expand_ratio": 4,
                 "block_type": "mobilevit",
                 "num_heads": 4,
-                "use_ach": False
+                "use_ach": True
             },
             "layer5": {
                 "out_channels": 160,
