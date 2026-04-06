@@ -1,5 +1,22 @@
 import torch
 
+input_vector = torch.tensor([0,1,0,0,1,0])
+
+# 找到所有值为1的索引
+ones_indices = (input_vector == 1).nonzero(as_tuple=True)[0]
+
+# 构造掩码矩阵 M
+k = len(ones_indices)  # 1的个数
+n = input_vector.size(0)  # 输入向量的长度
+M = torch.zeros(k, n, dtype=torch.float32, device=input_vector.device)
+
+# 将掩码矩阵的对应位置设为1
+M[torch.arange(k), ones_indices] = 1
+
+# 通过矩阵乘法提取结果
+# Y = M * x (broadcasted)
+Y = M * input_vector.unsqueeze(0)  # 广播乘法
+
 c1 = 16
 candidates_num = c1 * (c1 - 1) // 2
 can_idx_loc = torch.zeros((3, candidates_num * 2), dtype=torch.int64)
