@@ -2,7 +2,6 @@ nc: &nc 100
 task: classify
 backbone:
   - [-1, 1, ConvNormAct, [[16, 3, 2], BatchNorm2d, Hardswish]]  # [[c2, k, ...], BatchNorm2d, Hardswish]
-  # - [-1, 1, ConvNormAct, [[16, 3, 1, 1], BatchNorm2d, Hardswish]]  # for 32*32 input, (k=3,s=1,p=1) perform better
   - [-1, 1, InvertedResidual, [16, 16, 3, 1, 1, false, ReLU]]  # [c2, ce, k, s, d, false, ReLU]
   - [-1, 1, InvertedResidual, [24, 64, 3, 2, 1, false, ReLU]]  # -> C1
   - [-1, 1, InvertedResidual, [24, 72, 3, 1, 1, false, ReLU]]

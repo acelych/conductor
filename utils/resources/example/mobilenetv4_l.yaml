@@ -1,0 +1,40 @@
+nc: &nc 100
+task: classify
+backbone:
+  # 112px
+  - [-1, 1, ConvNormAct, [[24, 3, 2], BatchNorm2d, ReLU]]  # [[c2, k, s, ...], BatchNorm2d, ReLU]
+  # 56px
+  - [-1, 1, ConvNormAct, [[96, 3, 2], BatchNorm2d, ReLU]]
+  - [-1, 1, ConvNormAct, [[48, 1, 1], BatchNorm2d, ReLU]]
+  # 28px
+  - [-1, 1, UniversalInvertedBottleneck, [96, 4.0, 3, 5, 2]]  # [c2, ce_ratio, start_k, mid_k, s, *] ExtraDW
+  - [-1, 1, UniversalInvertedBottleneck, [96, 4.0, 3, 3, 1]]  # ExtraDW
+  # 14px
+  - [-1, 1, UniversalInvertedBottleneck, [192, 4.0, 3, 5, 2]]  # ExtraDW
+  - [-1, 1, UniversalInvertedBottleneck, [192, 4.0, 3, 3, 1]]  # ExtraDW
+  - [-1, 1, UniversalInvertedBottleneck, [192, 4.0, 3, 3, 1]]  # ExtraDW
+  - [-1, 1, UniversalInvertedBottleneck, [192, 4.0, 3, 3, 1]]  # ExtraDW
+  - [-1, 1, UniversalInvertedBottleneck, [192, 4.0, 3, 5, 1]]  # ExtraDW
+  - [-1, 1, UniversalInvertedBottleneck, [192, 4.0, 5, 3, 1]]  # ExtraDW
+  - [-1, 1, UniversalInvertedBottleneck, [192, 4.0, 5, 3, 1]]  # ExtraDW
+  - [-1, 1, UniversalInvertedBottleneck, [192, 4.0, 5, 3, 1]]  # ExtraDW
+  - [-1, 1, UniversalInvertedBottleneck, [192, 4.0, 5, 3, 1]]  # ExtraDW
+  - [-1, 1, UniversalInvertedBottleneck, [192, 4.0, 5, 3, 1]]  # ExtraDW
+  - [-1, 1, UniversalInvertedBottleneck, [192, 4.0, 3, 0, 1]]  # ConvNext
+  # 7px
+  - [-1, 1, UniversalInvertedBottleneck, [512, 4.0, 5, 5, 2]]  # ExtraDW
+  - [-1, 1, UniversalInvertedBottleneck, [512, 4.0, 5, 5, 1]]  # ExtraDW
+  - [-1, 1, UniversalInvertedBottleneck, [512, 4.0, 5, 5, 1]]  # ExtraDW
+  - [-1, 1, UniversalInvertedBottleneck, [512, 4.0, 5, 5, 1]]  # ExtraDW
+  - [-1, 1, UniversalInvertedBottleneck, [512, 4.0, 5, 0, 1]]  # ConvNext
+  - [-1, 1, UniversalInvertedBottleneck, [512, 4.0, 5, 3, 1]]  # ExtraDW
+  - [-1, 1, UniversalInvertedBottleneck, [512, 4.0, 5, 0, 1]]  # ConvNext
+  - [-1, 1, UniversalInvertedBottleneck, [512, 4.0, 5, 0, 1]]  # ConvNext
+  - [-1, 1, UniversalInvertedBottleneck, [512, 4.0, 5, 3, 1]]  # ExtraDW
+  - [-1, 1, UniversalInvertedBottleneck, [512, 4.0, 5, 5, 1]]  # ExtraDW
+  - [-1, 1, UniversalInvertedBottleneck, [512, 4.0, 5, 0, 1]]  # ConvNext
+  - [-1, 1, UniversalInvertedBottleneck, [512, 4.0, 5, 0, 1]]  # ConvNext
+  - [-1, 1, UniversalInvertedBottleneck, [512, 4.0, 5, 0, 1]]  # ConvNext
+  - [-1, 1, ConvNormAct, [[960, 1, 1], BatchNorm2d, ReLU]]
+head:
+  - [-1, 1, Classifier, [*nc, 1280, 0.3]]

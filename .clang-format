@@ -1,0 +1,15 @@
+BasedOnStyle: LLVM
+AlignConsecutiveDeclarations: true
+AlignConsecutiveAssignments: true
+AlignOperands: true
+ColumnLimit: 100
+IndentWidth: 4
+UseTab: Never
+BreakBeforeBraces: Allman
+AllowShortFunctionsOnASingleLine: false
+BinPackParameters: false
+AllowAllParametersOfDeclarationOnNextLine: true
+ReflowComments: true
+CommentPragmas: '^ TODO|^ FIXME'
+AccessModifierOffset: -4
+AlwaysBreakTemplateDeclarations: Yes

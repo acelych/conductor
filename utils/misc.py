@@ -1,4 +1,4 @@
-from typing import Tuple, Union, Sequence
+from typing import Tuple, Union, Sequence, Callable
 from copy import deepcopy
 
 import thop
@@ -11,6 +11,8 @@ except AttributeError:
     _lr_sch = getattr(optim.lr_scheduler, '_LRScheduler')
 LR_Scheduler = Union[_lr_sch, optim.lr_scheduler.ReduceLROnPlateau]
 
+BUILTIN_TYPE = [int, float, bool, str, list, dict, tuple, set, frozenset, bytes, bytearray]
+
 def get_module_class_str(obj: object) -> str:
     if not isinstance(obj, type):
         obj = obj.__class__
@@ -21,7 +23,7 @@ def get_module_class_str(obj: object) -> str:
     else:
         return class_str
 
-def get_model_assessment(model: nn.Module, imgsz=244) -> Tuple[str, Tuple]:
+def get_model_assessment(model: nn.Module, imgsz: Union[int, Sequence] = 244, model_mirror: Callable = None) -> Tuple[str, Tuple]:
     if not isinstance(imgsz, Sequence):
         imgsz = (imgsz, imgsz)  # expand if int/float
 
@@ -29,10 +31,18 @@ def get_model_assessment(model: nn.Module, imgsz=244) -> Tuple[str, Tuple]:
     n_p = sum(x.numel() for x in model.parameters())  # number of parameters
     n_g = sum(x.numel() for x in model.parameters() if x.requires_grad)  # number of gradients
 
-    p = next(model.parameters())
-    im = torch.empty((1, p.shape[1], *imgsz), device=p.device)  # input image in BCHW format
-    model_ = deepcopy(model.module if isinstance(model, (nn.parallel.DistributedDataParallel)) else model)
+    im = torch.empty((1, 3, *imgsz), device=next(model.parameters()).device)  # input image in BCHW format
+    try:
+        model_ = deepcopy(model.module if isinstance(model, (nn.parallel.DistributedDataParallel)) else model)
+    except Exception as e:
+        if model_mirror:
+            model_ = model_mirror()
+        else:
+            raise(e)
     gflops = thop.profile(model_, inputs=[im], verbose=False)[0] / 1e9 * 2  # imgsz GFLOPs
 
     info = f"model summary: {n_l:,} layers; {n_p:,} parameters; {n_g:,} gradients; {gflops:,} GFLOPs (within {imgsz})"
     return info, (n_l, n_p, n_g, gflops)
+
+def isbuiltin(obj: object):
+    return obj.__class__ in BUILTIN_TYPE or obj is None
