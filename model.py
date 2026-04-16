@@ -7,8 +7,7 @@ import torchvision
 from torch import nn, Tensor
 from . import models
 
-from .modules._utils import BaseModule
-from .modules.module import ModuleProvider
+from .modules.module import BaseModule, ModuleProvider
 from .utils import ResourceManager, ConfigManager, get_module_class_str, isbuiltin
 
 

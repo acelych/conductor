@@ -6,7 +6,7 @@ from torch import Tensor
 from torch.nn.parameter import Parameter
 from typing import List, Tuple, Dict, Union, Optional, Callable, Literal
 
-from ._utils import BaseModule, _convert_str2class
+from .module import BaseModule, _convert_str2class
 
 
 class TauScheduler:

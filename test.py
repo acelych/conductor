@@ -9,7 +9,6 @@ import numpy as np
 from .model import ModelManager
 from .data import DataLoaderManager
 from .utils import ConfigManager, ArtifactManager, MetricsManager, Calculate, Recorder, LogInterface, Plot, get_model_assessment
-from .modules._utils import TensorCollector
 
 
 class Tester:
@@ -64,11 +63,7 @@ class Tester:
         with torch.no_grad():
             for x, label in dataloader:
                 x, label = self.move_batch(x, label)
-                # TensorCollector.enable()
                 output = self.model(x)
-                # self.am.vis_matrices(TensorCollector.get("expand"), "expand", 1)
-                # self.am.vis_matrices(TensorCollector.get("input"), "input", 1)
-                # self.am.vis_matrices(TensorCollector.get("norm"), "norm", 1)
                 loss: Tensor = self.criterion(output, label)
                 self.recorder(output, label, loss)
                 self.log.bar_update()

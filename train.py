@@ -13,7 +13,7 @@ from .model import ModelManager, Model
 from .data import DataLoaderManager
 from .utils import ConfigManager, ArtifactManager, MetricsManager, Calculate, Recorder, LogInterface, LR_Scheduler, get_model_assessment
 from .test import Tester
-from .modules._utils import BaseModule, TensorCollector
+from .modules.module import BaseModule
 from .modules.nas import TauScheduler
 
 class Trainer(Tester):
@@ -194,7 +194,6 @@ class Trainer(Tester):
             self.log.bar_init(len(dataloader), self.get_bar_desc('val'))
 
         with torch.no_grad():
-            # TensorCollector.enable()
             for x, label in dataloader:
                 x, label = self.move_batch(x, label)
                 output = self.model(x)
@@ -205,15 +204,6 @@ class Trainer(Tester):
                 #         if row.isnan().any():
                 #             batch = idx
                 #             break
-                #     self.am.vis_matrices(TensorCollector.get("expand"), "expand", batch)
-                #     self.am.vis_matrices(TensorCollector.get("input"), "input", batch)
-                #     self.am.vis_matrices(TensorCollector.get("norm"), "norm", batch)
-                #     self.am.vis_matrices(TensorCollector.get("expand_nan"), "expand_nan", batch)
-                #     self.am.vis_matrices(TensorCollector.get("input_nan"), "input_nan", batch)
-                #     self.am.vis_matrices(TensorCollector.get("norm_nan"), "norm_nan", batch)
-                #     self.am.vis_matrices(TensorCollector.get("HR_nan_in"), "HR_nan_in", batch)
-                #     self.am.vis_matrices(TensorCollector.get("HR_nan_out"), "HR_nan_out", batch)
-                # TensorCollector.clear()
                 self.recorder(output, label, loss)
                 if self.isactive():
                     self.log.bar_update()

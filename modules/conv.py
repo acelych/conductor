@@ -5,7 +5,22 @@ import torch
 from torch import nn, Tensor
 from torch.nn import functional as F
 
-from ._utils import _convert_str2class, _autopad, BaseModule
+from .module import _convert_str2class, BaseModule
+
+
+def _autopad(k, p=None, d=1):
+    if p is None:
+        if isinstance(k, int) and isinstance(d, int):
+            p = (k - 1) * d // 2
+        elif isinstance(k, (int, Sequence)) and isinstance(d, (int, Sequence)):
+            _dim = len(k) if isinstance(k, Sequence) else len(d)
+            k = k if isinstance(k, Sequence) else tuple(k for _ in range(_dim))
+            d = d if isinstance(d, Sequence) else tuple(d for _ in range(_dim))
+            p = tuple((k[i] - 1) * d[i] // 2 for i in range(_dim))
+        else:
+            raise TypeError(f"expect kernel-size & dilation to be int or Sequence, got k:'{k.__class__.__name__}'; d:'{d.__class__.__name__}' instead.")
+    return p
+
 from .nas import SearchableModule
 
 

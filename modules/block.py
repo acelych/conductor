@@ -7,7 +7,7 @@ from torchvision.ops import SqueezeExcitation as SElayer
 
 from .conv import ConvNormAct, MeanFilter
 from .misc import CrossHadaNorm, RMSNorm, DyT, DySig, DySoft, DyAlge, ECA, MVE
-from ._utils import _convert_str2class, BaseModule, TensorCollector
+from .module import _convert_str2class, BaseModule
 
 from .cuda_modules.cdt_extensions import *
 
@@ -204,16 +204,9 @@ class HadamardExpansion(nn.Module):
             x_i = x[:, self.selected_seq[0], ...]
             x_j = x[:, self.selected_seq[1], ...]
         x_expand = x_i * x_j
-        # TensorCollector.collect(x_expand, "expand")
-        # TensorCollector.collect(x, "input")
         x_expand = self.norm(x_expand)
         # x = self.norm(torch.cat([x, x_expand], dim=1))
         
-        # TensorCollector.collect(x_expand, "norm")
-        # if (x_expand > 1e5).any() or (x > 1e5).any():
-        #     TensorCollector.collect(x_expand, "expand_nan")
-        #     TensorCollector.collect(x, "input_nan")
-        #     TensorCollector.collect(x_expand, "norm_nan")
             
         return torch.cat([x, x_expand], dim=1)
         
@@ -274,9 +267,6 @@ class HadamardResidual(BaseModule):
         
     def forward(self, x: Tensor) -> Tensor:
         res = self.block(x)
-        if res.isnan().any():
-            TensorCollector.collect(x, "HR_nan_in")
-            TensorCollector.collect(res, "HR_nan_out")
         if self.use_res_connect:
             res = x + res
         return res
