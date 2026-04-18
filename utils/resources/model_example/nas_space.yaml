@@ -1,0 +1,83 @@
+nc: &nc 100
+task: classify
+backbone:
+  # stem
+  - [-1, 1, SearchableConvNormAct, [[32, [2, 3], 2], BatchNorm2d, null]]  # [[c2, k, s, ...], BatchNorm2d, ReLU]
+  # stage 1
+  - [-1, 1, SearchableConvNormAct, [[48, [2, 3], 2], BatchNorm2d, Hardswish]]
+  - [-1, 1, ConvNormAct, [[32, 1, 1], BatchNorm2d, Hardswish]]
+  # stage 2
+  - [-1, 1, SearchableBaseModule, [64, 
+    [AdaptiveBottleneck, [64, Ghost, 4.0, 2, 2]],
+    [AdaptiveBottleneck, [64, Hada, 16, 2, 2, "DySoft"]],
+    [AdaptiveBottleneck, [64, Ghost, 4.0, 3, 2]],
+    [AdaptiveBottleneck, [64, Hada, 16, 3, 2, "DySoft"]],
+    ]]
+  - [-1, 1, SearchableBaseModule, [64, 
+    [AdaptiveBottleneck, [64, Ghost, 2.0, 3, 1]],
+    [AdaptiveBottleneck, [64, Hada, 16, 3, 1, "DySoft"]],
+    [SearchableBlank, [64]],
+    ]]
+  # stage 3
+  - [-1, 1, SearchableBaseModule, [96, 
+    [AdaptiveBottleneck, [96, Ghost, 4.0, 2, 2]],
+    [AdaptiveBottleneck, [96, Hada, 16, 2, 2, "DySoft"]],
+    [AdaptiveBottleneck, [96, Ghost, 4.0, 3, 2]],
+    [AdaptiveBottleneck, [96, Hada, 16, 3, 2, "DySoft"]],
+    ]]
+  - [-1, 1, SearchableBaseModule, [96, 
+    [AdaptiveBottleneck, [96, Ghost, 2.0, 5, 1]],
+    [AdaptiveBottleneck, [96, Hada, 16, 5, 1, "DySoft"]],  # cs: 16, cs_ex: 120, ce: 216
+    [SearchableBlank, [96]],
+    ]]
+  - [-1, 1, SearchableBaseModule, [96, 
+    [AdaptiveBottleneck, [96, Ghost, 2.0, 5, 1]],
+    [AdaptiveBottleneck, [96, Hada, 16, 5, 1, "DySoft"]],
+    [SearchableBlank, [96]],
+    ]]
+  - [-1, 1, SearchableBaseModule, [96, 
+    [AdaptiveBottleneck, [96, Ghost, 2.0, 5, 1]],
+    [AdaptiveBottleneck, [96, Hada, 16, 5, 1, "DySoft"]],
+    [SearchableBlank, [96]],
+    ]]
+  - [-1, 1, SearchableBaseModule, [96, 
+    [AdaptiveBottleneck, [96, Ghost, 2.0, 5, 1]],
+    [AdaptiveBottleneck, [96, Hada, 16, 5, 1, "DySoft"]],
+    [SearchableBlank, [96]],
+    ]]
+  - [-1, 1, SearchableBaseModule, [96, 
+    [AdaptiveBottleneck, [96, Ghost, 2.0, 5, 1]],
+    [AdaptiveBottleneck, [96, Hada, 16, 5, 1, "DySoft"]],
+    [SearchableBlank, [96]],
+    ]]
+  # stage 4
+  - [-1, 1, SearchableBaseModule, [128, 
+    [AdaptiveBottleneck, [128, Ghost, 6.0, 2, 2]],
+    [AdaptiveBottleneck, [128, Hada, 32, 2, 2, "DySoft"]],
+    [AdaptiveBottleneck, [128, Ghost, 6.0, 3, 2]],
+    [AdaptiveBottleneck, [128, Hada, 32, 3, 2, "DySoft"]],
+    ]]
+  - [-1, 1, SearchableBaseModule, [128, 
+    [AdaptiveBottleneck, [128, Ghost, 6.0, 7, 1]],
+    [AdaptiveBottleneck, [128, Hada, 32, 7, 1, "DySoft"]],  # cs: 32, cs_ex: 496, ce: 624
+    [SearchableBlank, [128]],
+    ]]
+  - [-1, 1, SearchableBaseModule, [128, 
+    [AdaptiveBottleneck, [128, Ghost, 6.0, 7, 1]],
+    [AdaptiveBottleneck, [128, Hada, 32, 7, 1, "DySoft"]],
+    [SearchableBlank, [128]],
+    ]]
+  - [-1, 1, SearchableBaseModule, [128, 
+    [AdaptiveBottleneck, [128, Ghost, 6.0, 7, 1]],
+    [AdaptiveBottleneck, [128, Hada, 32, 7, 1, "DySoft"]],
+    [SearchableBlank, [128]],
+    ]]
+  - [-1, 1, SearchableBaseModule, [128, 
+    [AdaptiveBottleneck, [128, Ghost, 6.0, 7, 1]],
+    [AdaptiveBottleneck, [128, Hada, 32, 7, 1, "DySoft"]],
+    [SearchableBlank, [128]],
+    ]]
+  - [-1, 1, ConvNormAct, [[960, 1, 1], BatchNorm2d, Hardswish]]
+
+head:
+  - [-1, 1, Classifier, [*nc, 1280, 0.3]]

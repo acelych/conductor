@@ -1,0 +1,43 @@
+# Example of instruction yaml for Neural Architecture Search (NAS)
+
+# ==============================================================================
+# 1. Basics & Resource Binding
+# ==============================================================================
+# model_yaml_path must point to a yaml file that defines the NAS search space
+model_yaml_path: /path/to/conductor/utils/resources/model_example/nas_space.yaml
+data_yaml_path: /path/to/conductor/data/cifar100.yaml
+command: train  # command from cli, indicate the Conductor what to do
+task: classify  # task of the model
+
+# ==============================================================================
+# 2. Training Details & Hyperparameters (Primary Weights)
+# ==============================================================================
+epochs: 250
+batch_size: 64
+device: cuda
+world: '[0]'             # DDP rank list. '[0]' for single GPU; '[0, 1]' for multi-GPU
+criterion: CrossEntropyLoss  # below: within default
+optimizer: AdamW
+scheduler: CosineAnnealingLR
+learn_rate: 0.003        # Initial learning rate for network weights
+momentum: 0.9
+decay: 1e-4              # Weight decay
+best_metrics: top1_acc   # The metric used to track the best model during training
+
+# ==============================================================================
+# 3. NAS (Architecture Search) Parameters
+# ==============================================================================
+# These parameters strictly manage the optimization of the Gumbel-Softmax architecture weights.
+# It is highly recommended to set learn_rate for architecture parameters roughly 1/10th of the network's learn_rate.
+nas:
+  optimizer: AdamW  # optimizer for architecture parameters
+  learn_rate: 3e-4  # learning rate for architecture parameters
+  min_tau: 0.1      # Minimum annealing temperature (approximates argmax/single choice)
+  max_tau: 4.0      # Initial temperature (encourages uniform exploration)
+  annealing: cos    # Temperature annealing schedule (cosine)
+
+# ==============================================================================
+# 4. Logging & Checkpoint Details
+# ==============================================================================
+output_dir: ./outputs    # The sandbox directory where outputs and logs will be saved
+ckpt: null               # Path to a checkpoint to resume from

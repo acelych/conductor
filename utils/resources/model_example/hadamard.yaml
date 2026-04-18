@@ -11,8 +11,8 @@ backbone:
   - [-1, 1, InvertedResidual, [48, 120, 5, 1, 1, true, Hardswish]]
   - [-1, 1, InvertedResidual, [48, 144, 5, 1, 1, true, Hardswish]]
   - [-1, 1, InvertedResidual, [96, 288, 5, 2, 1, true, Hardswish]]  # -> C4
-  - [-1, 1, HadamardResidualV2, [96, 32, 5, 1, 1, true, Hardswish]]  # cs: 32, cs_ex: 496, ce: 592
-  - [-1, 1, HadamardResidualV2, [96, 32, 5, 1, 1, true, Hardswish]]  # cs: 32, cs_ex: 496, ce: 592
+  - [-1, 1, HadamardResidual, [96, 32, 5, 1, 1, true, Hardswish]]  # cs: 32, cs_ex: 496, ce: 592
+  - [-1, 1, HadamardResidual, [96, 32, 5, 1, 1, true, Hardswish]]  # cs: 32, cs_ex: 496, ce: 592
   - [-1, 1, ConvNormAct, [[576, 1, 1], BatchNorm2d, Hardswish]]
 head:
   - [-1, 1, Classifier, [*nc, 1024, 0.3]]

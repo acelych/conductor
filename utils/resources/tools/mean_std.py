@@ -1,12 +1,20 @@
 from typing import Tuple
 from tqdm import tqdm
-
+import os
 import pandas as pd
 import numpy as np
 from io import BytesIO
 from PIL import Image
 
-data = pd.read_parquet(r'C:\Workspace\DataScience\ComputerVision\conductor\temp\cifar100\train-00000-of-00001.parquet')
+# Use relative path pointing to the data directory
+file_path = '../data/cifar100/train.parquet'
+
+if not os.path.exists(file_path):
+    print(f"File not found: {file_path}")
+    print("Please modify the script with the correct path to your dataset.")
+    exit(1)
+
+data = pd.read_parquet(file_path)
 mean = [0, 0, 0]
 ssd = [0, 0, 0]
 size = [0, 0, 0]

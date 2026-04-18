@@ -45,14 +45,14 @@ class ModuleProvider():
 
     @classmethod
     def _init_modules(cls):
-        from .block import InvertedResidual, UniversalInvertedBottleneck, HadamardResidual, HadamardResidualV2, AdaptiveBottleneck, StarBlock
+        from .block import InvertedResidual, UniversalInvertedBottleneck, HadamardResidual, AdaptiveBottleneck, StarBlock
         from .conv import ConvNormAct, SearchableConvNormAct
         from .head import Classifier, ClassifierSimple
         from .nas import SearchableBlank, SearchableModule, SearchableBaseModule
 
         _modules_list = [
             ConvNormAct, InvertedResidual, UniversalInvertedBottleneck,
-            HadamardResidual, HadamardResidualV2, AdaptiveBottleneck,
+            HadamardResidual, AdaptiveBottleneck,
             StarBlock, Classifier, ClassifierSimple, SearchableBlank,
             SearchableModule, SearchableBaseModule, SearchableConvNormAct,
         ]

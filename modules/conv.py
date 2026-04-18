@@ -1,11 +1,11 @@
 from typing import Sequence, Tuple, List
 
-import yaml
 import torch
 from torch import nn, Tensor
 from torch.nn import functional as F
 
 from .module import _convert_str2class, BaseModule
+from .nas import SearchableModule
 
 
 def _autopad(k, p=None, d=1):
@@ -20,8 +20,6 @@ def _autopad(k, p=None, d=1):
         else:
             raise TypeError(f"expect kernel-size & dilation to be int or Sequence, got k:'{k.__class__.__name__}'; d:'{d.__class__.__name__}' instead.")
     return p
-
-from .nas import SearchableModule
 
 
 class ConvNormAct(BaseModule):
